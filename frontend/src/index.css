@@ -320,7 +320,7 @@ input:focus, select:focus { outline: none; border-color: var(--color-primary); }
 }
 .location-chip-clear:hover { opacity: 1; }
 
-/* Location chip in table cells (read-only display) */
+/* Location token — read-only clickable display */
 .location-token {
   display: inline-flex;
   align-items: center;
@@ -333,9 +333,16 @@ input:focus, select:focus { outline: none; border-color: var(--color-primary); }
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  max-width: 220px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+a.location-token:hover {
+  background: #dbeafe;
+  border-color: var(--color-primary);
+  cursor: pointer;
 }
 
 /* Autocomplete dropdown */
@@ -350,19 +357,29 @@ input:focus, select:focus { outline: none; border-color: var(--color-primary); }
   z-index: 300;
   list-style: none;
   padding: 4px 0;
-  max-height: 260px;
+  max-height: 280px;
   overflow-y: auto;
 }
 .location-dropdown-item {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 12px;
   cursor: pointer;
-  font-size: 13px;
-  line-height: 1.4;
 }
 .location-dropdown-item:hover { background: #eff6ff; }
+.location-dropdown-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+.location-dropdown-full {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Responsive */
 @media (max-width: 640px) {

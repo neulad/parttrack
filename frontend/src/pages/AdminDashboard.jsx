@@ -59,11 +59,16 @@ function AddPartModal({ stations, onClose, onAdded }) {
 function AddStationModal({ onClose, onAdded }) {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
   async function submit(e) {
     e.preventDefault();
+    if (location && !locationConfirmed) {
+      setErr('Please select a location from the suggestions list.');
+      return;
+    }
     setLoading(true); setErr('');
     try {
       const s = await api.createStation({ name, location });
@@ -82,7 +87,11 @@ function AddStationModal({ onClose, onAdded }) {
           <div className="form-group"><label>Station Name</label><input value={name} onChange={(e) => setName(e.target.value)} required /></div>
           <div className="form-group">
             <label>Location</label>
-            <LocationAutocomplete value={location} onChange={setLocation} placeholder="Start typing an address…" />
+            <LocationAutocomplete
+              value={location}
+              onChange={(label, confirmed) => { setLocation(label); setLocationConfirmed(confirmed); }}
+              placeholder="Start typing an address…"
+            />
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -236,7 +245,13 @@ function StationsTab({ stations, onStationsChange, onViewStock }) {
                     <td><strong>{s.name}</strong></td>
                     <td>
                       {s.location
-                        ? <span className="location-token">{PIN}&nbsp;{s.location}</span>
+                        ? <a
+                            className="location-token"
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.location)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                          >{PIN}&nbsp;{s.location}</a>
                         : <span className="meta">—</span>}
                     </td>
                     <td className="meta">{new Date(s.created_at).toLocaleDateString()}</td>

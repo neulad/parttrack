@@ -1,93 +1,104 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const PIN = (
+export const PIN = (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
   </svg>
 );
 
 function useDebounce(value, delay) {
-  const [debounced, setDebounced] = useState(value);
+  const [d, setD] = useState(value);
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
+    const t = setTimeout(() => setD(value), delay);
     return () => clearTimeout(t);
   }, [value, delay]);
-  return debounced;
+  return d;
 }
 
-export default function LocationAutocomplete({ value, onChange, placeholder = 'e.g. Building A' }) {
-  const [inputText, setInputText]   = useState(value || '');
-  const [chip, setChip]             = useState(null);   // { label, display }
-  const [suggestions, setSuggestions] = useState([]);
-  const [open, setOpen]             = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const wrapRef                     = useRef(null);
-  const debouncedText               = useDebounce(inputText, 300);
+// Format a Nominatim address object → "Country, City, LastWordStreet, HouseNum"
+function formatAddress(addr) {
+  const country = addr.country;
+  const city    = addr.city || addr.town || addr.village || addr.municipality || addr.county;
+  const road    = addr.road || addr.street || addr.pedestrian || addr.footway;
+  const street  = road ? road.split(' ').pop() : null;
+  const num     = addr.house_number;
+  const streetWithNum = [street, num].filter(Boolean).join(' ');
+  return [country, city, streetWithNum].filter(Boolean).join(', ');
+}
 
-  // Fetch suggestions
+export default function LocationAutocomplete({
+  value,
+  onChange,          // (label: string, confirmed: bool) => void
+  placeholder = 'Start typing an address…',
+}) {
+  const [inputText,   setInputText]   = useState(value || '');
+  const [confirmed,   setConfirmed]   = useState(false);
+  const [suggestions, setSuggestions] = useState([]); // [{ label, full }]
+  const [open,        setOpen]        = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const wrapRef       = useRef(null);
+  const debounced     = useDebounce(inputText, 350);
+
+  // Fetch from Nominatim
   useEffect(() => {
-    if (chip || debouncedText.length < 2) { setSuggestions([]); return; }
+    if (confirmed || debounced.length < 2) { setSuggestions([]); setOpen(false); return; }
     setLoading(true);
     fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(debouncedText)}&format=json&limit=5&addressdetails=0`,
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(debounced)}&format=json&limit=5&addressdetails=1`,
       { headers: { 'Accept-Language': 'en' } }
     )
       .then((r) => r.json())
-      .then((data) => {
-        setSuggestions(data.map((r) => r.display_name));
-        setOpen(true);
+      .then((results) => {
+        const items = results.map((r) => ({
+          label: formatAddress(r.address),  // short formatted label
+          full:  r.display_name,            // shown in dropdown for context
+        })).filter((r) => r.label);
+        setSuggestions(items);
+        setOpen(items.length > 0);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [debouncedText, chip]);
+  }, [debounced, confirmed]);
 
-  // Close dropdown on outside click
+  // Close on outside click
   useEffect(() => {
-    function handle(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  function select(label) {
-    setChip(label);
-    setInputText(label);
+  function select(item) {
+    setInputText(item.label);
+    setConfirmed(true);
     setSuggestions([]);
     setOpen(false);
-    onChange(label);
+    onChange(item.label, true);
   }
 
   function handleType(e) {
     const v = e.target.value;
     setInputText(v);
-    setChip(null);          // chip disappears as soon as user types
-    onChange(v);
+    setConfirmed(false);
+    onChange(v, false);
   }
 
-  function clearChip() {
-    setChip(null);
+  function clear() {
     setInputText('');
-    onChange('');
+    setConfirmed(false);
     setSuggestions([]);
+    setOpen(false);
+    onChange('', false);
   }
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
-      {chip ? (
-        /* ── Chip (token) mode ── */
+      {confirmed ? (
         <div className="location-chip">
           {PIN}
-          <span className="location-chip-text">{chip}</span>
-          <button
-            type="button"
-            className="location-chip-clear"
-            onClick={clearChip}
-            title="Edit"
-          >×</button>
+          <span className="location-chip-text">{inputText}</span>
+          <button type="button" className="location-chip-clear" onClick={clear} title="Change">×</button>
         </div>
       ) : (
-        /* ── Text input mode ── */
         <div style={{ position: 'relative' }}>
           <input
             value={inputText}
@@ -104,13 +115,12 @@ export default function LocationAutocomplete({ value, onChange, placeholder = 'e
         </div>
       )}
 
-      {/* ── Dropdown ── */}
-      {open && suggestions.length > 0 && !chip && (
+      {open && suggestions.length > 0 && !confirmed && (
         <ul className="location-dropdown">
           {suggestions.map((s, i) => (
             <li key={i} className="location-dropdown-item" onMouseDown={() => select(s)}>
-              <span style={{ color: 'var(--color-primary)', marginRight: 6, flexShrink: 0 }}>{PIN}</span>
-              <span>{s}</span>
+              <span className="location-dropdown-label">{s.label}</span>
+              <span className="location-dropdown-full">{s.full}</span>
             </li>
           ))}
         </ul>

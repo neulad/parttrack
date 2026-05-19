@@ -17,13 +17,13 @@ async function seed() {
 
     // Stations
     const s1 = await client.query(
-      "INSERT INTO stations(name, location) VALUES('Alpha Station','Building A') RETURNING id"
+      "INSERT INTO stations(name, location) VALUES('Alpha Station','Germany, Hamburg, Allee 28') RETURNING id"
     );
     const s2 = await client.query(
-      "INSERT INTO stations(name, location) VALUES('Beta Station','Building B') RETURNING id"
+      "INSERT INTO stations(name, location) VALUES('Beta Station','Netherlands, Rotterdam, Waalhaven 12') RETURNING id"
     );
     const s3 = await client.query(
-      "INSERT INTO stations(name, location) VALUES('Gamma Station','Building C') RETURNING id"
+      "INSERT INTO stations(name, location) VALUES('Gamma Station','Poland, Warsaw, Pruszkowska 17') RETURNING id"
     );
     const [alphaId, betaId, gammaId] = [s1.rows[0].id, s2.rows[0].id, s3.rows[0].id];
 
