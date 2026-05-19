@@ -40,7 +40,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@parttrack.dev"
+                placeholder="e.g. j.smith@company.com"
                 required
                 autoFocus
               />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 
 function PartTrackLogo({ size = 32, color = 'currentColor' }) {
@@ -19,15 +20,15 @@ function PartTrackLogo({ size = 32, color = 'currentColor' }) {
   );
 }
 
-export default function Navbar() {
+export default function Navbar({ onLogoClick }) {
   const { user, logout } = useAuth();
 
   return (
     <nav className="navbar">
-      <div className="navbar-brand">
+      <Link to="/" className="navbar-brand" style={{ textDecoration: 'none' }} onClick={onLogoClick}>
         <PartTrackLogo size={30} color="var(--color-primary)" />
         <span>PartTrack</span>
-      </div>
+      </Link>
       <div className="navbar-right">
         <span className="navbar-user">
           {user?.email}&nbsp;
