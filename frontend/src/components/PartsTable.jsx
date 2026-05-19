@@ -31,52 +31,81 @@ function QuantityControl({ part, onUpdated }) {
 
   const changed = mode === 'stepper' ? delta !== 0 : (exact !== '' && parseInt(exact) !== currentQty);
 
-  function reset() { setDelta(0); setExact(''); setErr(''); }
+  function reset() { setMode('stepper'); setDelta(0); setExact(''); setErr(''); }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div className="qty-control" style={{ flexWrap: 'nowrap' }}>
 
         {/* Input area — fixed width so confirm buttons never shift it */}
-        <div style={{ width: 110, flexShrink: 0 }}>
+        <div style={{ width: 190, flexShrink: 0 }}>
           {mode === 'stepper' ? (
-            <div className="qty-stepper">
-              <button className="stepper-btn" onClick={() => setDelta((d) => d - 1)}>−</button>
-              <span className={`stepper-delta ${delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : ''}`}>
-                {delta > 0 ? `+${delta}` : delta}
-              </span>
-              <button className="stepper-btn" onClick={() => setDelta((d) => d + 1)}>+</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div className="qty-stepper">
+                <button type="button" className="stepper-btn" onClick={() => setDelta((d) => d - 1)}>−</button>
+                <span className={`stepper-delta ${delta > 0 ? 'delta-pos' : delta < 0 ? 'delta-neg' : ''}`}>
+                  {delta > 0 ? `+${delta}` : delta}
+                </span>
+                <button type="button" className="stepper-btn" onClick={() => setDelta((d) => d + 1)}>+</button>
+              </div>
+              <button type="button" className="qty-switch-btn" onClick={() => { setMode('exact'); setDelta(0); setErr(''); setExact(String(currentQty)); }}>
+                Exact value
+              </button>
             </div>
           ) : (
-            <input
-              className="qty-exact-input"
-              type="number"
-              min="0"
-              placeholder={String(currentQty)}
-              value={exact}
-              onChange={(e) => setExact(e.target.value)}
-              style={{ width: '100%' }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                className="qty-exact-input"
+                type="number"
+                min="0"
+                value={exact}
+                onChange={(e) => setExact(e.target.value)}
+                autoFocus
+                style={{ width: 96 }}
+              />
+              <button type="button" className="qty-switch-btn" onClick={() => { setMode('stepper'); reset(); }}>
+                Use stepper
+              </button>
+            </div>
           )}
         </div>
 
         {/* Preview + action buttons — always in DOM, hidden when unchanged */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, visibility: changed ? 'visible' : 'hidden' }}>
           <span className="qty-preview">→ {previewQty}</span>
-          <button className="btn btn-primary btn-sm" onClick={confirm} disabled={saving}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={confirm} disabled={saving}>
             {saving ? <span className="spinner" /> : 'Confirm'}
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={reset}>✕</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>✕</button>
         </div>
 
       </div>
 
-      <button className="qty-mode-toggle" onClick={() => { setMode(mode === 'stepper' ? 'exact' : 'stepper'); reset(); }}>
-        {mode === 'stepper' ? 'enter exact value' : 'use stepper'}
-      </button>
-
       {err && <span style={{ fontSize: 11, color: 'var(--color-danger)' }}>{err}</span>}
     </div>
+  );
+}
+
+function stockStatus(quantity, min) {
+  if (quantity === 0)        return { label: 'Out of stock — immediate reorder required',      color: 'var(--color-danger)' };
+  if (quantity < min)        return { label: 'Below minimum threshold — reorder recommended',   color: 'var(--color-warning)' };
+  if (quantity === min)      return { label: 'At minimum threshold — consider restocking',      color: 'var(--color-warning)' };
+  return                            { label: 'Stock level adequate',                            color: 'var(--color-success)' };
+}
+
+function QtyTooltip({ quantity, min }) {
+  const { label, color } = stockStatus(quantity, min);
+  return (
+    <span className="qty-tooltip-wrap">
+      <span className={`qty-value ${quantity < min ? 'qty-low' : 'qty-ok'}`}>
+        {quantity}
+        {quantity < min && ' ⚠'}
+      </span>
+      <span className="qty-tooltip">
+        <span className="qty-tooltip-dot" style={{ background: color }} />
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -113,10 +142,7 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin }) {
                 <td className="meta">{p.supplier || '—'}</td>
                 <td className="meta">{p.min_threshold}</td>
                 <td>
-                  <span className={`qty-value ${isLow ? 'qty-low' : 'qty-ok'}`}>
-                    {p.quantity}
-                    {isLow && ' ⚠'}
-                  </span>
+                  <QtyTooltip quantity={p.quantity} min={p.min_threshold} />
                 </td>
                 <td>
                   <QuantityControl part={p} onUpdated={onUpdated} />
