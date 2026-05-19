@@ -479,17 +479,26 @@ export default function AdminDashboard() {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [toast, setToast] = useState(null); // { msg, type }
+  const [toast, setToast] = useState(null); // { msg, type, leaving }
+  const toastLeaveTimer = useRef(null);
+  const toastRemoveTimer = useRef(null);
+
+  function clearToastTimers() {
+    clearTimeout(toastLeaveTimer.current);
+    clearTimeout(toastRemoveTimer.current);
+  }
 
   function showToast(msg, type = 'success') {
+    clearToastTimers();
     setToast({ msg, type, leaving: false });
-    setTimeout(() => setToast((t) => t ? { ...t, leaving: true } : null), 4500);
-    setTimeout(() => setToast(null), 5000);
+    toastLeaveTimer.current  = setTimeout(() => setToast((t) => t ? { ...t, leaving: true } : null), 4500);
+    toastRemoveTimer.current = setTimeout(() => setToast(null), 5000);
   }
 
   function dismissToast() {
+    clearToastTimers();
     setToast((t) => t ? { ...t, leaving: true } : null);
-    setTimeout(() => setToast(null), 500);
+    toastRemoveTimer.current = setTimeout(() => setToast(null), 500);
   }
 
   function handleViewStock(stationId) {
