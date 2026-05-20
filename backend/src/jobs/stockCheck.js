@@ -3,11 +3,15 @@ const pool = require('../db');
 const { sendLowStockAlert } = require('../lib/mailer');
 
 async function runStockCheck() {
-  // Reset cooldowns for parts that recovered above threshold
+  // Reset cooldowns for parts covered by stock + in-transit
   await pool.query(`
     DELETE FROM email_cooldowns ec
     USING parts p, stock_levels sl
-    WHERE ec.part_id = p.id AND sl.part_id = p.id AND sl.quantity >= p.min_threshold
+    WHERE ec.part_id = p.id AND sl.part_id = p.id
+      AND sl.quantity + COALESCE((
+        SELECT SUM(sh.quantity) FROM shipments sh
+        WHERE sh.part_id = p.id AND sh.status = 'pending'
+      ), 0) >= p.min_threshold
   `);
 
   const { rows: candidates } = await pool.query(`
