@@ -130,7 +130,7 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onView
         </thead>
         <tbody>
           {parts.map((p) => {
-            const isLow = p.quantity < p.min_threshold;
+            const isLow = (p.quantity + (parseInt(p.in_transit) || 0)) < p.min_threshold;
             const inTransit = parseInt(p.in_transit) || 0;
             return (
               <tr key={p.id} className={isLow ? 'low-stock' : ''}>

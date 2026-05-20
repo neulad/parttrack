@@ -376,7 +376,7 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
   const [detailPart, setDetailPart] = useState(null);
 
   const filtered = filterStation ? parts.filter((p) => p.station_id === parseInt(filterStation)) : parts;
-  const lowCount = filtered.filter((p) => p.quantity < p.min_threshold).length;
+  const lowCount = filtered.filter((p) => (p.quantity + (parseInt(p.in_transit) || 0)) < p.min_threshold).length;
 
   function handleUpdated(partId, newQty) {
     onPartsChange(parts.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));

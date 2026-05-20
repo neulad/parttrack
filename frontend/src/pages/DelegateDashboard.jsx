@@ -174,7 +174,7 @@ export default function DelegateDashboard() {
     ));
   }
 
-  const lowCount = parts.filter((p) => p.quantity < p.min_threshold).length;
+  const lowCount = parts.filter((p) => (p.quantity + (parseInt(p.in_transit) || 0)) < p.min_threshold).length;
 
   if (detailPart) {
     return (
