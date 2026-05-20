@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 
 function QuantityControl({ part, onUpdated }) {
@@ -93,7 +94,7 @@ function QtyTooltip({ quantity, min }) {
     <span className="qty-tooltip-wrap">
       <span className={`qty-value ${quantity < min ? 'qty-low' : 'qty-ok'}`}>
         {quantity}
-        {quantity < min && ' ⚠'}
+        {quantity < min && <span style={{ fontSize: 13 }}>⚠</span>}
       </span>
       <span className="qty-tooltip">
         <span className="qty-tooltip-dot" style={{ background: color }} />
@@ -104,6 +105,8 @@ function QtyTooltip({ quantity, min }) {
 }
 
 export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onViewHistory, onViewShipments }) {
+  const navigate = useNavigate();
+
   if (!parts.length) {
     return <div className="empty">No parts found.</div>;
   }
@@ -121,8 +124,8 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onView
             <th>Qty</th>
             <th>In Transit</th>
             <th>Adjust</th>
-            {isAdmin && <th></th>}
             <th></th>
+            {isAdmin && <th></th>}
           </tr>
         </thead>
         <tbody>
@@ -151,20 +154,27 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onView
                   )}
                 </td>
                 <td><QuantityControl part={p} onUpdated={onUpdated} /></td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => navigate(`/order?part_id=${p.id}`)}
+                    >
+                      Order
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => onViewHistory && onViewHistory(p)}
+                    >
+                      History
+                    </button>
+                  </div>
+                </td>
                 {isAdmin && (
                   <td>
                     <button className="btn btn-danger btn-sm" onClick={() => onDelete(p.id)}>Delete</button>
                   </td>
                 )}
-                <td>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => onViewHistory && onViewHistory(p)}
-                    title="View part history"
-                  >
-                    History
-                  </button>
-                </td>
               </tr>
             );
           })}

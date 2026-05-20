@@ -239,10 +239,12 @@ tbody tr.low-stock:hover { background: #fde68a; }
 
 /* Quantity cell */
 .qty-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 16px;
   font-weight: 600;
-  min-width: 36px;
-  text-align: center;
+  white-space: nowrap;
 }
 .qty-low { color: var(--color-danger); }
 .qty-ok { color: var(--color-success); }
