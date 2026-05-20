@@ -31,7 +31,6 @@ services:
       EMAIL_USER: ${EMAIL_USER:-}
       EMAIL_PASS: ${EMAIL_PASS:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@parttrack.dev}
-      ALERT_TO: ${ALERT_TO:-}
     ports:
       - '4000:4000'
 

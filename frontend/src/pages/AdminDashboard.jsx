@@ -390,6 +390,148 @@ function UsersTab({ stations }) {
   );
 }
 
+/* ── Tab: Alerts ── */
+
+function AlertsTab() {
+  const [recipients, setRecipients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newEmail, setNewEmail] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [err, setErr] = useState('');
+  const [flash, setFlash] = useState('');
+
+  useEffect(() => {
+    api.getAlertRecipients().then(setRecipients).finally(() => setLoading(false));
+  }, []);
+
+  function showFlash(msg) {
+    setFlash(msg);
+    setTimeout(() => setFlash(''), 3000);
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    setErr('');
+    setAdding(true);
+    try {
+      const r = await api.addAlertRecipient(newEmail);
+      setRecipients((prev) => [...prev, r]);
+      setNewEmail('');
+      showFlash('Recipient added.');
+    } catch (e) { setErr(e.message); }
+    finally { setAdding(false); }
+  }
+
+  async function handleSaveEdit(id) {
+    setErr('');
+    try {
+      const r = await api.updateAlertRecipient(id, editValue);
+      setRecipients((prev) => prev.map((x) => x.id === id ? r : x));
+      setEditingId(null);
+      showFlash('Recipient updated.');
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Remove this recipient?')) return;
+    await api.deleteAlertRecipient(id);
+    setRecipients((prev) => prev.filter((x) => x.id !== id));
+    showFlash('Recipient removed.');
+  }
+
+  return (
+    <>
+      <div className="dash-header">
+        <div>
+          <h1>Alert Recipients</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            These addresses receive low-stock email alerts.
+          </p>
+        </div>
+      </div>
+
+      {flash && <div className="banner banner-success">{flash}</div>}
+      {err && <div className="banner banner-error">{err}</div>}
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, padding: '14px 16px', alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+            <label>Add recipient</label>
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="e.g. manager@company.com"
+              required
+            />
+          </div>
+          <button className="btn btn-primary" disabled={adding}>
+            {adding ? <span className="spinner" /> : '+ Add'}
+          </button>
+        </form>
+      </div>
+
+      <div className="card">
+        {loading ? (
+          <div className="empty"><span className="spinner" /></div>
+        ) : recipients.length === 0 ? (
+          <div className="empty">No recipients configured. Alerts will not be sent.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Email address</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {recipients.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      {editingId === r.id ? (
+                        <input
+                          type="email"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(r.id); if (e.key === 'Escape') setEditingId(null); }}
+                          autoFocus
+                          style={{ width: '100%', maxWidth: 320 }}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: 500 }}>{r.email}</span>
+                      )}
+                    </td>
+                    <td className="meta">{new Date(r.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {editingId === r.id ? (
+                          <>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleSaveEdit(r.id)}>Save</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="btn btn-ghost btn-sm" onClick={() => { setEditingId(r.id); setEditValue(r.email); setErr(''); }}>Edit</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>Remove</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 /* ── Tab: Audit Log ── */
 
 function AuditTab() {
@@ -469,7 +611,7 @@ function AuditTab() {
 
 /* ── Admin Dashboard root ── */
 
-const TABS = ['Parts', 'Stations', 'Users', 'Audit Log'];
+const TABS = ['Parts', 'Stations', 'Users', 'Alerts', 'Audit Log'];
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState('Parts');
@@ -554,6 +696,7 @@ export default function AdminDashboard() {
             {tab === 'Parts' && <PartsTab parts={parts} stations={stations} onPartsChange={setParts} filterStation={filterStation} setFilterStation={setFilterStation} />}
             {tab === 'Stations' && <StationsTab stations={stations} onStationsChange={setStations} onViewStock={handleViewStock} />}
             {tab === 'Users' && <UsersTab stations={stations} />}
+            {tab === 'Alerts' && <AlertsTab />}
             {tab === 'Audit Log' && <AuditTab />}
           </>
         )}

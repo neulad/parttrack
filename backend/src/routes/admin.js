@@ -71,4 +71,46 @@ router.post('/check-stock', requireAdmin, async (req, res) => {
   res.json({ ok: true, message: 'Stock check complete' });
 });
 
+// Alert recipients
+router.get('/alert-recipients', requireAdmin, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM alert_recipients ORDER BY created_at');
+  res.json(rows);
+});
+
+router.post('/alert-recipients', requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO alert_recipients(email) VALUES($1) RETURNING *',
+      [email.trim().toLowerCase()]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
+    throw err;
+  }
+});
+
+router.put('/alert-recipients/:id', requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+  try {
+    const { rows } = await pool.query(
+      'UPDATE alert_recipients SET email = $1 WHERE id = $2 RETURNING *',
+      [email.trim().toLowerCase(), req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
+    throw err;
+  }
+});
+
+router.delete('/alert-recipients/:id', requireAdmin, async (req, res) => {
+  await pool.query('DELETE FROM alert_recipients WHERE id = $1', [req.params.id]);
+  res.status(204).end();
+});
+
 module.exports = router;

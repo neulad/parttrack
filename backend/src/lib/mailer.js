@@ -11,8 +11,8 @@ const transporter = DEV
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
-async function sendLowStockAlert(alerts) {
-  if (!alerts.length) return;
+async function sendLowStockAlert(alerts, recipients) {
+  if (!alerts.length || !recipients.length) return;
 
   const rows = alerts
     .map((a) => `<tr><td>${a.station}</td><td>${a.part_name}</td><td>${a.sku}</td><td>${a.quantity}</td><td>${a.min_threshold}</td></tr>`)
@@ -28,14 +28,14 @@ async function sendLowStockAlert(alerts) {
 
   const info = await transporter.sendMail({
     from: process.env.EMAIL_FROM || 'noreply@parttrack.dev',
-    to: process.env.ALERT_TO || 'admin@parttrack.dev',
+    to: recipients.join(', '),
     subject: `[PartTrack] ${alerts.length} part(s) below threshold`,
     html,
   });
 
   if (DEV) {
     const msg = JSON.parse(info.message);
-    console.log(`[mailer] Dev alert (not sent) → to: ${msg.to[0].address}, subject: ${msg.subject}`);
+    console.log(`[mailer] Dev alert (not sent) → to: ${recipients.join(', ')}, subject: ${msg.subject}`);
   }
 }
 

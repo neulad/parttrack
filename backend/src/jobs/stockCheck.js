@@ -32,7 +32,16 @@ async function runStockCheck() {
     return;
   }
 
-  await sendLowStockAlert(toAlert);
+  const { rows: recipients } = await pool.query(
+    'SELECT email FROM alert_recipients ORDER BY created_at'
+  );
+
+  if (!recipients.length) {
+    console.log('[stock-check] No alert recipients configured, skipping email.');
+    return;
+  }
+
+  await sendLowStockAlert(toAlert, recipients.map((r) => r.email));
 
   // Update cooldowns
   for (const r of toAlert) {

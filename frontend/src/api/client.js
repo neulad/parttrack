@@ -42,4 +42,9 @@ export const api = {
   createUser: (data) => request('/admin/users', { method: 'POST', body: data }),
   deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
   checkStock: () => request('/admin/check-stock', { method: 'POST' }),
+
+  getAlertRecipients: () => request('/admin/alert-recipients'),
+  addAlertRecipient: (email) => request('/admin/alert-recipients', { method: 'POST', body: { email } }),
+  updateAlertRecipient: (id, email) => request(`/admin/alert-recipients/${id}`, { method: 'PUT', body: { email } }),
+  deleteAlertRecipient: (id) => request(`/admin/alert-recipients/${id}`, { method: 'DELETE' }),
 };
