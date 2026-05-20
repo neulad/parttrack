@@ -390,26 +390,57 @@ function UsersTab({ stations }) {
   );
 }
 
+/* ── Modal: Edit Recipient ── */
+
+function EditRecipientModal({ recipient, onClose, onSaved }) {
+  const [value, setValue] = useState(recipient.email);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit(e) {
+    e.preventDefault();
+    setLoading(true); setErr('');
+    try {
+      const r = await api.updateAlertRecipient(recipient.id, value);
+      onSaved(r);
+      onClose();
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h2>Edit Recipient</h2>
+        {err && <div className="banner banner-error">{err}</div>}
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label>Email address</label>
+            <input type="email" value={value} onChange={(e) => setValue(e.target.value)} autoFocus required />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? <span className="spinner" /> : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ── Tab: Alerts ── */
 
-function AlertsTab() {
+function AlertsTab({ showToast }) {
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editValue, setEditValue] = useState('');
+  const [editing, setEditing] = useState(null);
   const [err, setErr] = useState('');
-  const [flash, setFlash] = useState('');
 
   useEffect(() => {
     api.getAlertRecipients().then(setRecipients).finally(() => setLoading(false));
   }, []);
-
-  function showFlash(msg) {
-    setFlash(msg);
-    setTimeout(() => setFlash(''), 3000);
-  }
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -419,26 +450,16 @@ function AlertsTab() {
       const r = await api.addAlertRecipient(newEmail);
       setRecipients((prev) => [...prev, r]);
       setNewEmail('');
-      showFlash('Recipient added.');
+      showToast('Recipient added.');
     } catch (e) { setErr(e.message); }
     finally { setAdding(false); }
-  }
-
-  async function handleSaveEdit(id) {
-    setErr('');
-    try {
-      const r = await api.updateAlertRecipient(id, editValue);
-      setRecipients((prev) => prev.map((x) => x.id === id ? r : x));
-      setEditingId(null);
-      showFlash('Recipient updated.');
-    } catch (e) { setErr(e.message); }
   }
 
   async function handleDelete(id) {
     if (!confirm('Remove this recipient?')) return;
     await api.deleteAlertRecipient(id);
     setRecipients((prev) => prev.filter((x) => x.id !== id));
-    showFlash('Recipient removed.');
+    showToast('Recipient removed.');
   }
 
   return (
@@ -452,7 +473,6 @@ function AlertsTab() {
         </div>
       </div>
 
-      {flash && <div className="banner banner-success">{flash}</div>}
       {err && <div className="banner banner-error">{err}</div>}
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -491,34 +511,12 @@ function AlertsTab() {
               <tbody>
                 {recipients.map((r) => (
                   <tr key={r.id}>
-                    <td>
-                      {editingId === r.id ? (
-                        <input
-                          type="email"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(r.id); if (e.key === 'Escape') setEditingId(null); }}
-                          autoFocus
-                          style={{ width: '100%', maxWidth: 320 }}
-                        />
-                      ) : (
-                        <span style={{ fontWeight: 500 }}>{r.email}</span>
-                      )}
-                    </td>
+                    <td><span className="recipient-chip">{r.email}</span></td>
                     <td className="meta">{new Date(r.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {editingId === r.id ? (
-                          <>
-                            <button className="btn btn-primary btn-sm" onClick={() => handleSaveEdit(r.id)}>Save</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
-                          </>
-                        ) : (
-                          <>
-                            <button className="btn btn-ghost btn-sm" onClick={() => { setEditingId(r.id); setEditValue(r.email); setErr(''); }}>Edit</button>
-                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>Remove</button>
-                          </>
-                        )}
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditing(r)}>Edit</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>Remove</button>
                       </div>
                     </td>
                   </tr>
@@ -528,6 +526,18 @@ function AlertsTab() {
           </div>
         )}
       </div>
+
+      {editing && (
+        <EditRecipientModal
+          recipient={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(r) => {
+            setRecipients((prev) => prev.map((x) => x.id === r.id ? r : x));
+            setEditing(null);
+            showToast('Recipient updated.');
+          }}
+        />
+      )}
     </>
   );
 }
@@ -696,7 +706,7 @@ export default function AdminDashboard() {
             {tab === 'Parts' && <PartsTab parts={parts} stations={stations} onPartsChange={setParts} filterStation={filterStation} setFilterStation={setFilterStation} />}
             {tab === 'Stations' && <StationsTab stations={stations} onStationsChange={setStations} onViewStock={handleViewStock} />}
             {tab === 'Users' && <UsersTab stations={stations} />}
-            {tab === 'Alerts' && <AlertsTab />}
+            {tab === 'Alerts' && <AlertsTab showToast={showToast} />}
             {tab === 'Audit Log' && <AuditTab />}
           </>
         )}

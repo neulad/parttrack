@@ -406,6 +406,20 @@ input::placeholder { color: #c0c6d4; font-style: normal; }
 .dash-header h1 { font-size: 20px; font-weight: 700; }
 .dash-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Alert recipient chip */
+.recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
 /* Status badge */
 .badge {
   display: inline-block;
