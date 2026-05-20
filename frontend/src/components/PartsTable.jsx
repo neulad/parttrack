@@ -20,8 +20,7 @@ function QuantityControl({ part, onUpdated }) {
     try {
       await api.updateQuantity(part.id, newQty);
       onUpdated(part.id, newQty);
-      setDelta(0);
-      setExact('');
+      reset();
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -60,6 +59,7 @@ function QuantityControl({ part, onUpdated }) {
                 min="0"
                 value={exact}
                 onChange={(e) => setExact(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && confirm()}
                 autoFocus
                 style={{ width: 96 }}
               />
