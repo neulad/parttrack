@@ -1,4 +1,10 @@
 require('dotenv').config();
+
+if (!process.env.JWT_SECRET) {
+  console.error('[startup] JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+
 const express = require('express');
 
 const authRoutes = require('./routes/auth');
@@ -15,7 +21,6 @@ app.use('/api/stations', stationsRoutes);
 app.use('/api/parts', partsRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Global error handler
 app.use((err, req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });

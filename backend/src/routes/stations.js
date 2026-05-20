@@ -1,4 +1,5 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const pool = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
@@ -17,15 +18,23 @@ router.get('/', requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-router.post('/', requireAdmin, async (req, res) => {
-  const { name, location } = req.body;
-  if (!name) return res.status(400).json({ error: 'name required' });
-  const { rows } = await pool.query(
-    'INSERT INTO stations(name, location) VALUES($1,$2) RETURNING *',
-    [name, location || null]
-  );
-  res.status(201).json(rows[0]);
-});
+router.post(
+  '/',
+  requireAdmin,
+  body('name').trim().notEmpty().withMessage('name is required').isLength({ max: 200 }),
+  body('location').optional({ nullable: true }).trim().isLength({ max: 500 }),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+
+    const { name, location } = req.body;
+    const { rows } = await pool.query(
+      'INSERT INTO stations(name, location) VALUES($1,$2) RETURNING *',
+      [name, location || null]
+    );
+    res.status(201).json(rows[0]);
+  }
+);
 
 router.delete('/:id', requireAdmin, async (req, res) => {
   await pool.query('DELETE FROM stations WHERE id = $1', [req.params.id]);

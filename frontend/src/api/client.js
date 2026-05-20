@@ -29,8 +29,14 @@ export const api = {
   createStation: (data) => request('/stations', { method: 'POST', body: data }),
   deleteStation: (id) => request(`/stations/${id}`, { method: 'DELETE' }),
 
-  getParts: (station_id) =>
-    request(`/parts${station_id ? `?station_id=${station_id}` : ''}`),
+  getParts: ({ station_id, page, limit } = {}) => {
+    const params = new URLSearchParams();
+    if (station_id) params.set('station_id', station_id);
+    if (page)       params.set('page', page);
+    if (limit)      params.set('limit', limit);
+    const qs = params.toString();
+    return request(`/parts${qs ? `?${qs}` : ''}`);
+  },
   getPart: (id) => request(`/parts/${id}`),
   createPart: (data) => request('/parts', { method: 'POST', body: data }),
   updateQuantity: (id, quantity, note) =>

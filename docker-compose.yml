@@ -24,7 +24,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://parttrack:parttrack@db:5432/parttrack
-      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkey}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — set it in your .env file}
       NODE_ENV: ${NODE_ENV:-development}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-587}

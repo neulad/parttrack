@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar.jsx';
 import { api } from '../api/client.js';
 
@@ -20,7 +20,8 @@ function InfoRow({ label, children }) {
 
 export default function OrderPage() {
   const navigate = useNavigate();
-  const partId = new URLSearchParams(window.location.search).get('part_id');
+  const [searchParams] = useSearchParams();
+  const partId = searchParams.get('part_id');
 
   const [part, setPart] = useState(null);
   const [loadErr, setLoadErr] = useState('');

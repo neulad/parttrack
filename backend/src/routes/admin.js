@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const { body, validationResult } = require('express-validator');
 const pool = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { runStockCheck } = require('../jobs/stockCheck');
@@ -36,28 +37,32 @@ router.get('/users', requireAdmin, async (req, res) => {
 });
 
 // Create user
-router.post('/users', requireAdmin, async (req, res) => {
-  const { email, password, role, station_id } = req.body;
-  if (!email || !password || !role) {
-    return res.status(400).json({ error: 'email, password, role required' });
-  }
-  if (!['admin', 'delegate'].includes(role)) {
-    return res.status(400).json({ error: 'role must be admin or delegate' });
-  }
+router.post(
+  '/users',
+  requireAdmin,
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('role').isIn(['admin', 'delegate']).withMessage('role must be admin or delegate'),
+  body('station_id').optional({ nullable: true }).isInt({ min: 1 }).toInt(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
-  const hash = await bcrypt.hash(password, 10);
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO users(email, password_hash, role, station_id)
-       VALUES($1,$2,$3,$4) RETURNING id, email, role, station_id, created_at`,
-      [email, hash, role, station_id || null]
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
-    throw err;
+    const { email, password, role, station_id } = req.body;
+    const hash = await bcrypt.hash(password, 10);
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO users(email, password_hash, role, station_id)
+         VALUES($1,$2,$3,$4) RETURNING id, email, role, station_id, created_at`,
+        [email, hash, role, station_id || null]
+      );
+      res.status(201).json(rows[0]);
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already exists' });
+      throw err;
+    }
   }
-});
+);
 
 // Delete user
 router.delete('/users/:id', requireAdmin, async (req, res) => {
@@ -77,36 +82,48 @@ router.get('/alert-recipients', requireAdmin, async (req, res) => {
   res.json(rows);
 });
 
-router.post('/alert-recipients', requireAdmin, async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email required' });
-  try {
-    const { rows } = await pool.query(
-      'INSERT INTO alert_recipients(email) VALUES($1) RETURNING *',
-      [email.trim().toLowerCase()]
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
-    throw err;
-  }
-});
+router.post(
+  '/alert-recipients',
+  requireAdmin,
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
 
-router.put('/alert-recipients/:id', requireAdmin, async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email required' });
-  try {
-    const { rows } = await pool.query(
-      'UPDATE alert_recipients SET email = $1 WHERE id = $2 RETURNING *',
-      [email.trim().toLowerCase(), req.params.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
-    throw err;
+    try {
+      const { rows } = await pool.query(
+        'INSERT INTO alert_recipients(email) VALUES($1) RETURNING *',
+        [req.body.email]
+      );
+      res.status(201).json(rows[0]);
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
+      throw err;
+    }
   }
-});
+);
+
+router.put(
+  '/alert-recipients/:id',
+  requireAdmin,
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
+
+    try {
+      const { rows } = await pool.query(
+        'UPDATE alert_recipients SET email = $1 WHERE id = $2 RETURNING *',
+        [req.body.email, req.params.id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      res.json(rows[0]);
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already in list' });
+      throw err;
+    }
+  }
+);
 
 router.delete('/alert-recipients/:id', requireAdmin, async (req, res) => {
   await pool.query('DELETE FROM alert_recipients WHERE id = $1', [req.params.id]);

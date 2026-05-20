@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import DelegateDashboard from './pages/DelegateDashboard.jsx';
 import OrderPage from './pages/OrderPage.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
 
 export const AuthContext = createContext(null);
 
@@ -30,6 +31,12 @@ function loadUser() {
   return payload;
 }
 
+function OrderGuard({ user }) {
+  const location = useLocation();
+  if (!user) return <Navigate to={`/login?next=/order${location.search}`} replace />;
+  return <OrderPage />;
+}
+
 export default function App() {
   const [user, setUser] = useState(loadUser);
 
@@ -45,27 +52,26 @@ export default function App() {
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
-          <Route
-            path="/order"
-            element={!user ? <Navigate to={`/login?next=/order${window.location.search}`} replace /> : <OrderPage />}
-          />
-          <Route
-            path="/*"
-            element={
-              !user ? (
-                <Navigate to="/login" replace />
-              ) : user.role === 'admin' ? (
-                <AdminDashboard />
-              ) : (
-                <DelegateDashboard />
-              )
-            }
-          />
-        </Routes>
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
+            <Route path="/order" element={<OrderGuard user={user} />} />
+            <Route
+              path="/*"
+              element={
+                !user ? (
+                  <Navigate to="/login" replace />
+                ) : user.role === 'admin' ? (
+                  <AdminDashboard />
+                ) : (
+                  <DelegateDashboard />
+                )
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </AuthContext.Provider>
   );
 }

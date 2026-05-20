@@ -1,54 +1,17 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Navbar from '../components/Navbar.jsx';
 import PartsTable from '../components/PartsTable.jsx';
+import Dropdown from '../components/Dropdown.jsx';
+import PartDetailView from '../components/PartDetailView.jsx';
 import LocationAutocomplete from '../components/LocationAutocomplete.jsx';
 import { api } from '../api/client.js';
+import { useToast } from '../context/ToastContext.jsx';
 
 const PIN = (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
   </svg>
 );
-
-/* ── Custom Dropdown ── */
-
-function Dropdown({ value, onChange, options }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const selected = options.find((o) => String(o.value) === String(value));
-
-  useEffect(() => {
-    function handleOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [open]);
-
-  return (
-    <div className="custom-dropdown" ref={ref}>
-      <button type="button" className="custom-dropdown-trigger" onClick={() => setOpen((o) => !o)}>
-        <span>{selected ? selected.label : options[0]?.label}</span>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }}>
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-      {open && (
-        <div className="custom-dropdown-menu">
-          {options.map((o) => (
-            <div
-              key={o.value}
-              className={`custom-dropdown-item${String(o.value) === String(value) ? ' active' : ''}`}
-              onMouseDown={() => { onChange(o.value); setOpen(false); }}
-            >
-              {o.label}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ── Modals ── */
 
@@ -254,136 +217,65 @@ function EditRecipientModal({ recipient, onClose, onSaved }) {
   );
 }
 
-/* ── Part Detail view (unified history + shipments) ── */
+/* ── Pagination ── */
 
-const DETAIL_FILTERS = [
-  { value: 'all', label: 'All events' },
-  { value: 'shipment', label: 'Deliveries' },
-  { value: 'quantity_change', label: 'Qty adjustments' },
-];
-
-function PartDetailView({ part, onBack, onDelivered }) {
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [delivering, setDelivering] = useState(null);
-
-  useEffect(() => {
-    api.getPartHistory(part.id).then(setEvents).finally(() => setLoading(false));
-  }, [part.id]);
-
-  async function handleDeliver(e) {
-    setDelivering(e.shipment_id);
-    try {
-      const result = await api.deliverShipment(part.id, e.shipment_id);
-      setEvents((prev) => prev.map((ev) =>
-        ev.shipment_id === e.shipment_id
-          ? { ...ev, status: 'delivered', delivered_at: new Date().toISOString() }
-          : ev
-      ));
-      onDelivered(part.id, result.new_quantity, e.quantity);
-    } catch (err) { alert(err.message); }
-    finally { setDelivering(null); }
-  }
-
-  const visible = filter === 'all' ? events : events.filter((e) => e.type === filter);
-
+function Pagination({ page, total, limit, onPage }) {
+  const pages = Math.ceil(total / limit);
+  if (pages <= 1) return null;
   return (
-    <>
-      <button className="back-arrow" onClick={onBack}>← Back to Parts</button>
-      <div className="dash-header" style={{ marginTop: 8 }}>
-        <div>
-          <h1>{part.name}</h1>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            <span className="sku-badge">{part.sku}</span>&nbsp;·&nbsp;{part.station_name}
-          </p>
-        </div>
-        <Dropdown
-          value={filter}
-          onChange={setFilter}
-          options={DETAIL_FILTERS}
-        />
-      </div>
-      <div className="card">
-        {loading ? (
-          <div className="empty"><span className="spinner" /></div>
-        ) : visible.length === 0 ? (
-          <div className="empty">No events yet.</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th><th></th></tr>
-              </thead>
-              <tbody>
-                {visible.map((e, i) => (
-                  <tr key={i}>
-                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(e.at).toLocaleString()}</td>
-                    <td>
-                      {e.type === 'quantity_change' ? (
-                        <span className="badge" style={{ background: e.delta > 0 ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', color: e.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                          Qty {e.delta > 0 ? `+${e.delta}` : e.delta}
-                        </span>
-                      ) : (
-                        <span className={`badge badge-${e.status === 'delivered' ? 'admin' : 'delegate'}`}>
-                          {e.status === 'delivered' ? 'Delivered' : 'In transit'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="meta">{e.user_email || e.created_by_email || '—'}</td>
-                    <td className="meta">
-                      {e.type === 'quantity_change' ? (
-                        <>{e.old_quantity} → {e.new_quantity}{e.note ? ` · ${e.note}` : ''}</>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>{e.quantity} units</span>
-                          {e.tracking_link && (
-                            <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>
-                          )}
-                          {e.status === 'delivered' && e.delivered_at && (
-                            <span className="meta">{new Date(e.delivered_at).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {e.type === 'shipment' && e.status === 'pending' && (
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => handleDeliver(e)}
-                          disabled={delivering === e.shipment_id}
-                        >
-                          {delivering === e.shipment_id ? <span className="spinner" /> : 'Mark Delivered'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+      <button className="btn btn-ghost btn-sm" onClick={() => onPage(page - 1)} disabled={page <= 1}>← Prev</button>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+        Page {page} of {pages} ({total} parts)
+      </span>
+      <button className="btn btn-ghost btn-sm" onClick={() => onPage(page + 1)} disabled={page >= pages}>Next →</button>
+    </div>
   );
 }
 
 /* ── Tab: Parts ── */
 
-function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStation }) {
+const PAGE_LIMIT = 50;
+
+function PartsTab({ stations, filterStation, setFilterStation }) {
+  const { showToast } = useToast();
+  const [parts, setParts] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [flash, setFlash] = useState('');
   const [detailPart, setDetailPart] = useState(null);
 
-  const filtered = filterStation ? parts.filter((p) => p.station_id === parseInt(filterStation)) : parts;
-  const lowCount = filtered.filter((p) => (p.quantity + (parseInt(p.in_transit) || 0)) < p.min_threshold).length;
+  const loadParts = useCallback(async (p = page, stationId = filterStation) => {
+    setLoading(true);
+    try {
+      const data = await api.getParts({ station_id: stationId || undefined, page: p, limit: PAGE_LIMIT });
+      setParts(data.rows);
+      setTotal(data.total);
+    } catch (e) {
+      showToast(`Failed to load parts: ${e.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filterStation]);
+
+  useEffect(() => { loadParts(page, filterStation); }, [page, filterStation]);
+
+  function handleFilterChange(val) {
+    setFilterStation(val);
+    setPage(1);
+  }
+
+  function handlePage(p) {
+    setPage(p);
+  }
 
   function handleUpdated(partId, newQty) {
-    onPartsChange(parts.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));
+    setParts((prev) => prev.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));
   }
 
   function handleDelivered(partId, newQty, deliveredQty) {
-    onPartsChange(parts.map((p) => p.id === partId
+    setParts((prev) => prev.map((p) => p.id === partId
       ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - deliveredQty) }
       : p
     ));
@@ -393,20 +285,31 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
     if (!confirm('Delete this part?')) return;
     try {
       await api.deletePart(id);
-      onPartsChange(parts.filter((p) => p.id !== id));
-      setFlash('Part deleted.');
-      setTimeout(() => setFlash(''), 3000);
-    } catch (e) { alert(e.message); }
+      setParts((prev) => prev.filter((p) => p.id !== id));
+      setTotal((t) => t - 1);
+      showToast('Part deleted.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
   }
 
   function handleAdded(part) {
-    onPartsChange([...parts, { ...part, station_name: stations.find((s) => s.id === part.station_id)?.name }]);
-    setFlash('Part added.');
-    setTimeout(() => setFlash(''), 3000);
+    setParts((prev) => [...prev, { ...part, station_name: stations.find((s) => s.id === part.station_id)?.name }]);
+    setTotal((t) => t + 1);
+    showToast('Part added.');
   }
 
+  const lowCount = parts.filter((p) => (p.quantity + (parseInt(p.in_transit) || 0)) < p.min_threshold).length;
+
   if (detailPart) {
-    return <PartDetailView part={detailPart} onBack={() => setDetailPart(null)} onDelivered={handleDelivered} />;
+    return (
+      <PartDetailView
+        part={detailPart}
+        backLabel="Back to Parts"
+        onBack={() => setDetailPart(null)}
+        onDelivered={handleDelivered}
+      />
+    );
   }
 
   return (
@@ -419,23 +322,27 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
         <div className="dash-actions">
           <Dropdown
             value={filterStation}
-            onChange={setFilterStation}
+            onChange={handleFilterChange}
             options={[{ value: '', label: 'All stations' }, ...stations.map((s) => ({ value: s.id, label: s.name }))]}
           />
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Part</button>
         </div>
       </div>
-      {flash && <div className="banner banner-success">{flash}</div>}
       <div className="card">
-        <PartsTable
-          parts={filtered}
-          onUpdated={handleUpdated}
-          onDelete={handleDelete}
-          isAdmin={true}
-          onViewHistory={(p) => setDetailPart(p)}
-          onViewShipments={(p) => setDetailPart(p)}
-        />
+        {loading ? (
+          <div className="empty"><span className="spinner" /></div>
+        ) : (
+          <PartsTable
+            parts={parts}
+            onUpdated={handleUpdated}
+            onDelete={handleDelete}
+            isAdmin={true}
+            onViewHistory={(p) => setDetailPart(p)}
+            onViewShipments={(p) => setDetailPart(p)}
+          />
+        )}
       </div>
+      <Pagination page={page} total={total} limit={PAGE_LIMIT} onPage={handlePage} />
       {showAdd && <AddPartModal stations={stations} onClose={() => setShowAdd(false)} onAdded={handleAdded} />}
     </>
   );
@@ -444,17 +351,18 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
 /* ── Tab: Stations ── */
 
 function StationsTab({ stations, onStationsChange, onViewStock }) {
+  const { showToast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
-  const [flash, setFlash] = useState('');
 
   async function handleDelete(id) {
     if (!confirm('Delete this station and ALL its parts?')) return;
     try {
       await api.deleteStation(id);
       onStationsChange(stations.filter((s) => s.id !== id));
-      setFlash('Station deleted.');
-      setTimeout(() => setFlash(''), 3000);
-    } catch (e) { alert(e.message); }
+      showToast('Station deleted.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
   }
 
   return (
@@ -463,7 +371,6 @@ function StationsTab({ stations, onStationsChange, onViewStock }) {
         <h1>Stations</h1>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Station</button>
       </div>
-      {flash && <div className="banner banner-success">{flash}</div>}
       <div className="card">
         {stations.length === 0 ? (
           <div className="empty">No stations yet.</div>
@@ -504,7 +411,7 @@ function StationsTab({ stations, onStationsChange, onViewStock }) {
           </div>
         )}
       </div>
-      {showAdd && <AddStationModal onClose={() => setShowAdd(false)} onAdded={(s) => { onStationsChange([...stations, s]); setFlash('Station added.'); setTimeout(() => setFlash(''), 3000); }} />}
+      {showAdd && <AddStationModal onClose={() => setShowAdd(false)} onAdded={(s) => { onStationsChange([...stations, s]); showToast('Station added.'); }} />}
     </>
   );
 }
@@ -512,10 +419,10 @@ function StationsTab({ stations, onStationsChange, onViewStock }) {
 /* ── Tab: Users ── */
 
 function UsersTab({ stations }) {
+  const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [flash, setFlash] = useState('');
 
   useEffect(() => {
     api.getUsers().then(setUsers).catch(console.error).finally(() => setLoading(false));
@@ -526,9 +433,10 @@ function UsersTab({ stations }) {
     try {
       await api.deleteUser(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
-      setFlash('User deleted.');
-      setTimeout(() => setFlash(''), 3000);
-    } catch (e) { alert(e.message); }
+      showToast('User deleted.');
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
   }
 
   return (
@@ -537,7 +445,6 @@ function UsersTab({ stations }) {
         <h1>Users</h1>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add User</button>
       </div>
-      {flash && <div className="banner banner-success">{flash}</div>}
       <div className="card">
         {loading ? (
           <div className="empty"><span className="spinner" /></div>
@@ -560,14 +467,15 @@ function UsersTab({ stations }) {
           </div>
         )}
       </div>
-      {showAdd && <AddUserModal stations={stations} onClose={() => setShowAdd(false)} onAdded={(u) => { setUsers((prev) => [...prev, u]); setFlash('User created.'); setTimeout(() => setFlash(''), 3000); }} />}
+      {showAdd && <AddUserModal stations={stations} onClose={() => setShowAdd(false)} onAdded={(u) => { setUsers((prev) => [...prev, u]); showToast('User created.'); }} />}
     </>
   );
 }
 
 /* ── Tab: Alerts ── */
 
-function AlertsTab({ showToast }) {
+function AlertsTab() {
+  const { showToast } = useToast();
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
@@ -678,56 +586,30 @@ function AlertsTab({ showToast }) {
 const TABS = ['Parts', 'Stations', 'Users', 'Alerts'];
 
 export default function AdminDashboard() {
+  const { showToast } = useToast();
   const [tab, setTab] = useState('Parts');
   const [filterStation, setFilterStation] = useState('');
-  const [parts, setParts] = useState([]);
   const [stations, setStations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingStations, setLoadingStations] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [toast, setToast] = useState(null);
-  const toastLeaveTimer = useRef(null);
-  const toastRemoveTimer = useRef(null);
 
-  function clearToastTimers() {
-    clearTimeout(toastLeaveTimer.current);
-    clearTimeout(toastRemoveTimer.current);
-  }
-
-  function showToast(msg, type = 'success') {
-    clearToastTimers();
-    setToast({ msg, type, leaving: false });
-    toastLeaveTimer.current  = setTimeout(() => setToast((t) => t ? { ...t, leaving: true } : null), 4500);
-    toastRemoveTimer.current = setTimeout(() => setToast(null), 5000);
-  }
-
-  function dismissToast() {
-    clearToastTimers();
-    setToast((t) => t ? { ...t, leaving: true } : null);
-    toastRemoveTimer.current = setTimeout(() => setToast(null), 500);
-  }
+  useEffect(() => {
+    api.getStations()
+      .then(setStations)
+      .catch((e) => showToast(`Failed to load stations: ${e.message}`, 'error'))
+      .finally(() => setLoadingStations(false));
+  }, []);
 
   function handleViewStock(stationId) {
     setFilterStation(String(stationId));
     setTab('Parts');
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [p, s] = await Promise.all([api.getParts(), api.getStations()]);
-      setParts(p);
-      setStations(s);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
   async function handleSync() {
     setSyncing(true);
     try {
-      await Promise.all([load(), api.checkStock()]);
-      showToast('Inventory synced and stock levels checked.');
+      await api.checkStock();
+      showToast('Stock check triggered successfully.');
     } catch (e) {
       showToast(`Sync failed: ${e.message}`, 'error');
     } finally {
@@ -752,24 +634,17 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {loading ? (
+        {loadingStations ? (
           <div className="empty"><span className="spinner" /></div>
         ) : (
           <>
-            {tab === 'Parts' && <PartsTab parts={parts} stations={stations} onPartsChange={setParts} filterStation={filterStation} setFilterStation={setFilterStation} />}
+            {tab === 'Parts' && <PartsTab stations={stations} filterStation={filterStation} setFilterStation={setFilterStation} />}
             {tab === 'Stations' && <StationsTab stations={stations} onStationsChange={setStations} onViewStock={handleViewStock} />}
             {tab === 'Users' && <UsersTab stations={stations} />}
-            {tab === 'Alerts' && <AlertsTab showToast={showToast} />}
+            {tab === 'Alerts' && <AlertsTab />}
           </>
         )}
       </div>
-
-      {toast && (
-        <div className={`toast toast-${toast.type}${toast.leaving ? ' toast-leave' : ''}`}>
-          <span>{toast.msg}</span>
-          <button className="toast-close" onClick={dismissToast}>✕</button>
-        </div>
-      )}
     </div>
   );
 }

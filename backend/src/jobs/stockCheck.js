@@ -2,6 +2,20 @@ const cron = require('node-cron');
 const pool = require('../db');
 const { sendLowStockAlert } = require('../lib/mailer');
 
+function shouldAlert(r, now) {
+  const inTransit = parseInt(r.in_transit);
+  if (r.quantity + inTransit >= r.min_threshold) return false;
+  if (!r.last_sent_at) return true;
+
+  const hoursSinceLast = (now - new Date(r.last_sent_at)) / (1000 * 60 * 60);
+  const count = parseInt(r.alert_count);
+
+  if (count < 3) return hoursSinceLast >= 24;
+
+  const isMonday8am = now.getDay() === 1 && now.getHours() === 8;
+  return isMonday8am && hoursSinceLast >= 144;
+}
+
 async function runStockCheck() {
   // Reset cooldowns for parts covered by stock + in-transit
   await pool.query(`
@@ -36,20 +50,7 @@ async function runStockCheck() {
   `);
 
   const now = new Date();
-  const isMonday8am = now.getDay() === 1 && now.getHours() === 8;
-
-  const toAlert = candidates.filter((r) => {
-    const inTransit = parseInt(r.in_transit);
-    if (r.quantity + inTransit >= r.min_threshold) return false;
-
-    if (!r.last_sent_at) return true;
-
-    const hoursSinceLast = (now - new Date(r.last_sent_at)) / (1000 * 60 * 60);
-    const count = parseInt(r.alert_count);
-
-    if (count < 3) return hoursSinceLast >= 24;
-    return isMonday8am && hoursSinceLast >= 144; // weekly: Monday 8am, min 6 days gap
-  });
+  const toAlert = candidates.filter((r) => shouldAlert(r, now));
 
   if (!toAlert.length) {
     console.log('[stock-check] No alerts to send.');
@@ -86,4 +87,4 @@ function startStockCheckJob() {
   console.log('[stock-check] Cron started (hourly).');
 }
 
-module.exports = { runStockCheck, startStockCheckJob };
+module.exports = { runStockCheck, startStockCheckJob, shouldAlert };
