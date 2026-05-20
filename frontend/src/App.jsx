@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import DelegateDashboard from './pages/DelegateDashboard.jsx';
+import OrderPage from './pages/OrderPage.jsx';
 
 export const AuthContext = createContext(null);
 
@@ -47,6 +48,10 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
+          <Route
+            path="/order"
+            element={!user ? <Navigate to={`/login?next=/order${window.location.search}`} replace /> : <OrderPage />}
+          />
           <Route
             path="/*"
             element={

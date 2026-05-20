@@ -35,8 +35,6 @@ function QuantityControl({ part, onUpdated }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div className="qty-control" style={{ flexWrap: 'nowrap' }}>
-
-        {/* Input area — fixed width so confirm buttons never shift it */}
         <div style={{ width: 190, flexShrink: 0 }}>
           {mode === 'stepper' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -69,8 +67,6 @@ function QuantityControl({ part, onUpdated }) {
             </div>
           )}
         </div>
-
-        {/* Preview + action buttons — always in DOM, hidden when unchanged */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, visibility: changed ? 'visible' : 'hidden' }}>
           <span className="qty-preview">→ {previewQty}</span>
           <button type="button" className="btn btn-primary btn-sm" onClick={confirm} disabled={saving}>
@@ -78,19 +74,17 @@ function QuantityControl({ part, onUpdated }) {
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>✕</button>
         </div>
-
       </div>
-
       {err && <span style={{ fontSize: 11, color: 'var(--color-danger)' }}>{err}</span>}
     </div>
   );
 }
 
 function stockStatus(quantity, min) {
-  if (quantity === 0)        return { label: 'Out of stock — immediate reorder required',      color: 'var(--color-danger)' };
-  if (quantity < min)        return { label: 'Below minimum threshold — reorder recommended',   color: 'var(--color-warning)' };
-  if (quantity === min)      return { label: 'At minimum threshold — consider restocking',      color: 'var(--color-warning)' };
-  return                            { label: 'Stock level adequate',                            color: 'var(--color-success)' };
+  if (quantity === 0)   return { label: 'Out of stock — immediate reorder required',    color: 'var(--color-danger)' };
+  if (quantity < min)   return { label: 'Below minimum threshold — reorder recommended', color: 'var(--color-warning)' };
+  if (quantity === min) return { label: 'At minimum threshold — consider restocking',    color: 'var(--color-warning)' };
+  return                       { label: 'Stock level adequate',                          color: 'var(--color-success)' };
 }
 
 function QtyTooltip({ quantity, min }) {
@@ -109,7 +103,7 @@ function QtyTooltip({ quantity, min }) {
   );
 }
 
-export default function PartsTable({ parts, onUpdated, onDelete, isAdmin }) {
+export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onViewHistory, onViewShipments }) {
   if (!parts.length) {
     return <div className="empty">No parts found.</div>;
   }
@@ -125,39 +119,52 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin }) {
             <th>Supplier</th>
             <th>Min</th>
             <th>Qty</th>
+            <th>In Transit</th>
             <th>Adjust</th>
             {isAdmin && <th></th>}
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {parts.map((p) => {
             const isLow = p.quantity < p.min_threshold;
+            const inTransit = parseInt(p.in_transit) || 0;
             return (
               <tr key={p.id} className={isLow ? 'low-stock' : ''}>
                 {isAdmin && <td className="meta">{p.station_name}</td>}
-                <td>
-                  <div className="part-name">{p.name}</div>
-                </td>
+                <td><div className="part-name">{p.name}</div></td>
                 <td><span className="sku-badge">{p.sku}</span></td>
                 <td className="meta">{p.supplier || '—'}</td>
                 <td className="meta">{p.min_threshold}</td>
+                <td><QtyTooltip quantity={p.quantity} min={p.min_threshold} /></td>
                 <td>
-                  <QtyTooltip quantity={p.quantity} min={p.min_threshold} />
+                  {inTransit > 0 ? (
+                    <button
+                      className="in-transit-badge"
+                      onClick={() => onViewShipments && onViewShipments(p)}
+                      title="View shipments in transit"
+                    >
+                      +{inTransit}
+                    </button>
+                  ) : (
+                    <span className="meta">—</span>
+                  )}
                 </td>
-                <td>
-                  <QuantityControl part={p} onUpdated={onUpdated} />
-                </td>
+                <td><QuantityControl part={p} onUpdated={onUpdated} /></td>
                 {isAdmin && (
                   <td>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => onDelete(p.id)}
-                      title="Delete part"
-                    >
-                      Delete
-                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => onDelete(p.id)}>Delete</button>
                   </td>
                 )}
+                <td>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onViewHistory && onViewHistory(p)}
+                    title="View part history"
+                  >
+                    History
+                  </button>
+                </td>
               </tr>
             );
           })}

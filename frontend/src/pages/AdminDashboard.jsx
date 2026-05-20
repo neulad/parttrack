@@ -27,11 +27,7 @@ function Dropdown({ value, onChange, options }) {
 
   return (
     <div className="custom-dropdown" ref={ref}>
-      <button
-        type="button"
-        className="custom-dropdown-trigger"
-        onClick={() => setOpen((o) => !o)}
-      >
+      <button type="button" className="custom-dropdown-trigger" onClick={() => setOpen((o) => !o)}>
         <span>{selected ? selected.label : options[0]?.label}</span>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }}>
           <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -57,7 +53,7 @@ function Dropdown({ value, onChange, options }) {
 /* ── Modals ── */
 
 function AddPartModal({ stations, onClose, onAdded }) {
-  const [form, setForm] = useState({ station_id: stations[0]?.id || '', name: '', sku: '', supplier: '', min_threshold: '5' });
+  const [form, setForm] = useState({ station_id: stations[0]?.id || '', name: '', sku: '', supplier: '', min_threshold: '5', tracking_link: '', ordered_quantity: '' });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
@@ -67,7 +63,13 @@ function AddPartModal({ stations, onClose, onAdded }) {
     e.preventDefault();
     setLoading(true); setErr('');
     try {
-      const part = await api.createPart({ ...form, min_threshold: parseInt(form.min_threshold) || 0, station_id: parseInt(form.station_id) });
+      const payload = {
+        ...form,
+        min_threshold: parseInt(form.min_threshold) || 0,
+        station_id: parseInt(form.station_id),
+        ordered_quantity: form.ordered_quantity ? parseInt(form.ordered_quantity) : 0,
+      };
+      const part = await api.createPart(payload);
       onAdded(part);
       onClose();
     } catch (e) { setErr(e.message); }
@@ -97,6 +99,16 @@ function AddPartModal({ stations, onClose, onAdded }) {
               <button type="button" className="threshold-btn" onClick={() => setForm((f) => ({ ...f, min_threshold: String(parseInt(f.min_threshold || 0) + 1) }))}>+</button>
             </div>
           </div>
+          <div className="form-group">
+            <label>Tracking link <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>(optional — if already ordered)</span></label>
+            <input type="url" value={form.tracking_link} onChange={set('tracking_link')} placeholder="https://track.dhl.com/..." />
+          </div>
+          {form.tracking_link && (
+            <div className="form-group">
+              <label>Ordered quantity</label>
+              <input type="number" min="1" value={form.ordered_quantity} onChange={set('ordered_quantity')} placeholder="How many units on the way?" required />
+            </div>
+          )}
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? <span className="spinner" /> : 'Add Part'}</button>
@@ -206,17 +218,209 @@ function AddUserModal({ stations, onClose, onAdded }) {
   );
 }
 
+function EditRecipientModal({ recipient, onClose, onSaved }) {
+  const [value, setValue] = useState(recipient.email);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit(e) {
+    e.preventDefault();
+    setLoading(true); setErr('');
+    try {
+      const r = await api.updateAlertRecipient(recipient.id, value);
+      onSaved(r);
+      onClose();
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h2>Edit Recipient</h2>
+        {err && <div className="banner banner-error">{err}</div>}
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label>Email address</label>
+            <input type="email" value={value} onChange={(e) => setValue(e.target.value)} autoFocus required />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? <span className="spinner" /> : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Part History view ── */
+
+function PartHistoryView({ part, onBack }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getPartHistory(part.id).then(setHistory).finally(() => setLoading(false));
+  }, [part.id]);
+
+  return (
+    <>
+      <button className="back-arrow" onClick={onBack}>← Back to Parts</button>
+      <div className="dash-header" style={{ marginTop: 8 }}>
+        <div>
+          <h1>{part.name}</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            <span className="sku-badge">{part.sku}</span>&nbsp; {part.station_name}
+          </p>
+        </div>
+      </div>
+      <div className="card">
+        {loading ? (
+          <div className="empty"><span className="spinner" /></div>
+        ) : history.length === 0 ? (
+          <div className="empty">No activity yet.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th></tr>
+              </thead>
+              <tbody>
+                {history.map((e, i) => (
+                  <tr key={i}>
+                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(e.at).toLocaleString()}</td>
+                    <td>
+                      {e.type === 'quantity_change' ? (
+                        <span className="badge" style={{ background: e.delta > 0 ? 'var(--color-success-bg)' : 'var(--color-danger-bg)', color: e.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                          Qty {e.delta > 0 ? `+${e.delta}` : e.delta}
+                        </span>
+                      ) : (
+                        <span className={`badge badge-${e.status === 'delivered' ? 'admin' : 'delegate'}`}>
+                          {e.status === 'delivered' ? 'Delivered' : 'Ordered'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="meta">{e.user_email || e.created_by_email || '—'}</td>
+                    <td className="meta">
+                      {e.type === 'quantity_change' ? (
+                        <>{e.old_quantity} → {e.new_quantity}{e.note ? ` · ${e.note}` : ''}</>
+                      ) : (
+                        <>{e.quantity} units{e.tracking_link ? <> · <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a></> : ''}</>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ── Shipments view ── */
+
+function ShipmentsView({ part, onBack, onDelivered }) {
+  const [shipments, setShipments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [delivering, setDelivering] = useState(null);
+
+  useEffect(() => {
+    api.getShipments(part.id).then(setShipments).finally(() => setLoading(false));
+  }, [part.id]);
+
+  async function handleDeliver(shipment) {
+    setDelivering(shipment.id);
+    try {
+      const result = await api.deliverShipment(part.id, shipment.id);
+      setShipments((prev) => prev.map((s) => s.id === shipment.id ? { ...s, status: 'delivered', delivered_at: new Date().toISOString() } : s));
+      onDelivered(part.id, result.new_quantity);
+    } catch (e) { alert(e.message); }
+    finally { setDelivering(null); }
+  }
+
+  return (
+    <>
+      <button className="back-arrow" onClick={onBack}>← Back to Parts</button>
+      <div className="dash-header" style={{ marginTop: 8 }}>
+        <div>
+          <h1>Shipments in Transit</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            {part.name} · <span className="sku-badge">{part.sku}</span> · {part.station_name}
+          </p>
+        </div>
+      </div>
+      <div className="card">
+        {loading ? (
+          <div className="empty"><span className="spinner" /></div>
+        ) : shipments.length === 0 ? (
+          <div className="empty">No shipments found.</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Qty</th><th>Ordered by</th><th>Tracking</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                {shipments.map((s) => (
+                  <tr key={s.id}>
+                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(s.created_at).toLocaleDateString()}</td>
+                    <td style={{ fontWeight: 600 }}>{s.quantity}</td>
+                    <td className="meta">{s.created_by_email || '—'}</td>
+                    <td>
+                      {s.tracking_link
+                        ? <a href={s.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>
+                        : <span className="meta">—</span>}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${s.status === 'delivered' ? 'admin' : 'delegate'}`}>
+                        {s.status === 'delivered' ? `Delivered ${new Date(s.delivered_at).toLocaleDateString()}` : 'In transit'}
+                      </span>
+                    </td>
+                    <td>
+                      {s.status === 'pending' && (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleDeliver(s)}
+                          disabled={delivering === s.id}
+                        >
+                          {delivering === s.id ? <span className="spinner" /> : 'Mark Delivered'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 /* ── Tab: Parts ── */
 
 function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStation }) {
   const [showAdd, setShowAdd] = useState(false);
   const [flash, setFlash] = useState('');
+  const [detailView, setDetailView] = useState(null); // { type: 'history'|'shipments', part }
 
   const filtered = filterStation ? parts.filter((p) => p.station_id === parseInt(filterStation)) : parts;
   const lowCount = filtered.filter((p) => p.quantity < p.min_threshold).length;
 
   function handleUpdated(partId, newQty) {
     onPartsChange(parts.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));
+  }
+
+  function handleDelivered(partId, newQty) {
+    onPartsChange(parts.map((p) => p.id === partId
+      ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - 1) }
+      : p
+    ));
+    setDetailView(null);
   }
 
   async function handleDelete(id) {
@@ -233,6 +437,13 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
     onPartsChange([...parts, { ...part, station_name: stations.find((s) => s.id === part.station_id)?.name }]);
     setFlash('Part added.');
     setTimeout(() => setFlash(''), 3000);
+  }
+
+  if (detailView?.type === 'history') {
+    return <PartHistoryView part={detailView.part} onBack={() => setDetailView(null)} />;
+  }
+  if (detailView?.type === 'shipments') {
+    return <ShipmentsView part={detailView.part} onBack={() => setDetailView(null)} onDelivered={handleDelivered} />;
   }
 
   return (
@@ -253,7 +464,14 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
       </div>
       {flash && <div className="banner banner-success">{flash}</div>}
       <div className="card">
-        <PartsTable parts={filtered} onUpdated={handleUpdated} onDelete={handleDelete} isAdmin={true} />
+        <PartsTable
+          parts={filtered}
+          onUpdated={handleUpdated}
+          onDelete={handleDelete}
+          isAdmin={true}
+          onViewHistory={(p) => setDetailView({ type: 'history', part: p })}
+          onViewShipments={(p) => setDetailView({ type: 'shipments', part: p })}
+        />
       </div>
       {showAdd && <AddPartModal stations={stations} onClose={() => setShowAdd(false)} onAdded={handleAdded} />}
     </>
@@ -307,18 +525,12 @@ function StationsTab({ stations, onStationsChange, onViewStock }) {
                     </td>
                     <td className="meta">{new Date(s.created_at).toLocaleDateString()}</td>
                     <td>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={(e) => { e.stopPropagation(); onViewStock(s.id); }}
-                      >
+                      <button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); onViewStock(s.id); }}>
                         View Stock →
                       </button>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
-                      >
+                      <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}>
                         Delete
                       </button>
                     </td>
@@ -387,44 +599,6 @@ function UsersTab({ stations }) {
       </div>
       {showAdd && <AddUserModal stations={stations} onClose={() => setShowAdd(false)} onAdded={(u) => { setUsers((prev) => [...prev, u]); setFlash('User created.'); setTimeout(() => setFlash(''), 3000); }} />}
     </>
-  );
-}
-
-/* ── Modal: Edit Recipient ── */
-
-function EditRecipientModal({ recipient, onClose, onSaved }) {
-  const [value, setValue] = useState(recipient.email);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
-
-  async function submit(e) {
-    e.preventDefault();
-    setLoading(true); setErr('');
-    try {
-      const r = await api.updateAlertRecipient(recipient.id, value);
-      onSaved(r);
-      onClose();
-    } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2>Edit Recipient</h2>
-        {err && <div className="banner banner-error">{err}</div>}
-        <form onSubmit={submit}>
-          <div className="form-group">
-            <label>Email address</label>
-            <input type="email" value={value} onChange={(e) => setValue(e.target.value)} autoFocus required />
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? <span className="spinner" /> : 'Save'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }
 
@@ -501,13 +675,7 @@ function AlertsTab({ showToast }) {
         ) : (
           <div className="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Email address</th>
-                  <th>Added</th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead><tr><th>Email address</th><th>Added</th><th></th></tr></thead>
               <tbody>
                 {recipients.map((r) => (
                   <tr key={r.id}>
@@ -542,86 +710,9 @@ function AlertsTab({ showToast }) {
   );
 }
 
-/* ── Tab: Audit Log ── */
-
-function AuditTab() {
-  const [log, setLog] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [offset, setOffset] = useState(0);
-  const LIMIT = 50;
-
-  const load = useCallback(async (off = 0) => {
-    setLoading(true);
-    try {
-      const data = await api.getAuditLog(LIMIT, off);
-      setLog(data);
-      setOffset(off);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(0); }, [load]);
-
-  return (
-    <>
-      <div className="dash-header">
-        <h1>Audit Log</h1>
-        <button className="btn btn-ghost btn-sm" onClick={() => load(offset)}>↻ Refresh</button>
-      </div>
-      <div className="card">
-        {loading ? (
-          <div className="empty"><span className="spinner" /></div>
-        ) : log.length === 0 ? (
-          <div className="empty">No audit entries yet.</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>User</th>
-                  <th>Part</th>
-                  <th>Station</th>
-                  <th>Old</th>
-                  <th>New</th>
-                  <th>Δ</th>
-                  <th>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {log.map((e) => (
-                  <tr key={e.id}>
-                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</td>
-                    <td className="meta">{e.user_email || '—'}</td>
-                    <td>
-                      <span className="part-name" style={{ fontSize: 13 }}>{e.part_name || '—'}</span>
-                      {e.sku && <> <span className="sku-badge">{e.sku}</span></>}
-                    </td>
-                    <td className="meta">{e.station_name || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>{e.old_quantity}</td>
-                    <td style={{ textAlign: 'center' }}>{e.new_quantity}</td>
-                    <td style={{ textAlign: 'center', fontWeight: 600, color: e.delta > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                      {e.delta > 0 ? `+${e.delta}` : e.delta}
-                    </td>
-                    <td className="meta">{e.note || ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--color-border)' }}>
-          <button className="btn btn-ghost btn-sm" disabled={offset === 0} onClick={() => load(Math.max(0, offset - LIMIT))}>← Prev</button>
-          <button className="btn btn-ghost btn-sm" disabled={log.length < LIMIT} onClick={() => load(offset + LIMIT)}>Next →</button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 /* ── Admin Dashboard root ── */
 
-const TABS = ['Parts', 'Stations', 'Users', 'Alerts', 'Audit Log'];
+const TABS = ['Parts', 'Stations', 'Users', 'Alerts'];
 
 export default function AdminDashboard() {
   const [tab, setTab] = useState('Parts');
@@ -630,7 +721,7 @@ export default function AdminDashboard() {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [toast, setToast] = useState(null); // { msg, type, leaving }
+  const [toast, setToast] = useState(null);
   const toastLeaveTimer = useRef(null);
   const toastRemoveTimer = useRef(null);
 
@@ -686,7 +777,6 @@ export default function AdminDashboard() {
       <Navbar onLogoClick={() => setTab('Parts')} />
       <div className="container" style={{ paddingTop: 24 }}>
 
-        {/* Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
           <button className="btn btn-primary btn-sm" onClick={handleSync} disabled={syncing}>
             {syncing ? <><span className="spinner" style={{ width: 13, height: 13 }} />&nbsp;Syncing…</> : '↻ Sync with the database'}
@@ -707,12 +797,10 @@ export default function AdminDashboard() {
             {tab === 'Stations' && <StationsTab stations={stations} onStationsChange={setStations} onViewStock={handleViewStock} />}
             {tab === 'Users' && <UsersTab stations={stations} />}
             {tab === 'Alerts' && <AlertsTab showToast={showToast} />}
-            {tab === 'Audit Log' && <AuditTab />}
           </>
         )}
       </div>
 
-      {/* Toast */}
       {toast && (
         <div className={`toast toast-${toast.type}${toast.leaving ? ' toast-leave' : ''}`}>
           <span>{toast.msg}</span>

@@ -31,10 +31,19 @@ export const api = {
 
   getParts: (station_id) =>
     request(`/parts${station_id ? `?station_id=${station_id}` : ''}`),
+  getPart: (id) => request(`/parts/${id}`),
   createPart: (data) => request('/parts', { method: 'POST', body: data }),
   updateQuantity: (id, quantity, note) =>
     request(`/parts/${id}/quantity`, { method: 'PATCH', body: { quantity, note } }),
   deletePart: (id) => request(`/parts/${id}`, { method: 'DELETE' }),
+
+  getShipments: (partId) => request(`/parts/${partId}/shipments`),
+  createShipment: (partId, data) =>
+    request(`/parts/${partId}/shipments`, { method: 'POST', body: data }),
+  deliverShipment: (partId, shipmentId) =>
+    request(`/parts/${partId}/shipments/${shipmentId}/deliver`, { method: 'PATCH' }),
+
+  getPartHistory: (partId) => request(`/parts/${partId}/history`),
 
   getAuditLog: (limit = 50, offset = 0) =>
     request(`/admin/audit-log?limit=${limit}&offset=${offset}`),

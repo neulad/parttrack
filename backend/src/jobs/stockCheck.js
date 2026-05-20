@@ -3,7 +3,14 @@ const pool = require('../db');
 const { sendLowStockAlert } = require('../lib/mailer');
 
 async function runStockCheck() {
-  const { rows: lowParts } = await pool.query(`
+  // Reset cooldowns for parts that recovered above threshold
+  await pool.query(`
+    DELETE FROM email_cooldowns ec
+    USING parts p, stock_levels sl
+    WHERE ec.part_id = p.id AND sl.part_id = p.id AND sl.quantity >= p.min_threshold
+  `);
+
+  const { rows: candidates } = await pool.query(`
     SELECT
       p.id AS part_id,
       p.name AS part_name,
@@ -11,7 +18,12 @@ async function runStockCheck() {
       p.min_threshold,
       s.name AS station,
       sl.quantity,
-      ec.last_sent_at
+      COALESCE((
+        SELECT SUM(sh.quantity) FROM shipments sh
+        WHERE sh.part_id = p.id AND sh.status = 'pending'
+      ), 0) AS in_transit,
+      ec.last_sent_at,
+      COALESCE(ec.alert_count, 0) AS alert_count
     FROM parts p
     JOIN stock_levels sl ON sl.part_id = p.id
     JOIN stations s ON s.id = p.station_id
@@ -20,11 +32,19 @@ async function runStockCheck() {
   `);
 
   const now = new Date();
-  const cooldownMs = 24 * 60 * 60 * 1000;
+  const isMonday8am = now.getDay() === 1 && now.getHours() === 8;
 
-  const toAlert = lowParts.filter((r) => {
+  const toAlert = candidates.filter((r) => {
+    const inTransit = parseInt(r.in_transit);
+    if (r.quantity + inTransit >= r.min_threshold) return false;
+
     if (!r.last_sent_at) return true;
-    return now - new Date(r.last_sent_at) > cooldownMs;
+
+    const hoursSinceLast = (now - new Date(r.last_sent_at)) / (1000 * 60 * 60);
+    const count = parseInt(r.alert_count);
+
+    if (count < 3) return hoursSinceLast >= 24;
+    return isMonday8am && hoursSinceLast >= 144; // weekly: Monday 8am, min 6 days gap
   });
 
   if (!toAlert.length) {
@@ -43,12 +63,11 @@ async function runStockCheck() {
 
   await sendLowStockAlert(toAlert, recipients.map((r) => r.email));
 
-  // Update cooldowns
   for (const r of toAlert) {
     await pool.query(
-      `INSERT INTO email_cooldowns(part_id, last_sent_at)
-       VALUES($1, now())
-       ON CONFLICT(part_id) DO UPDATE SET last_sent_at = now()`,
+      `INSERT INTO email_cooldowns(part_id, last_sent_at, alert_count)
+       VALUES($1, now(), 1)
+       ON CONFLICT(part_id) DO UPDATE SET last_sent_at = now(), alert_count = email_cooldowns.alert_count + 1`,
       [r.part_id]
     );
   }
