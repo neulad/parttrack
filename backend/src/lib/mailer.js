@@ -1,41 +1,21 @@
 const nodemailer = require('nodemailer');
 
-let _transporter = null;
+const DEV = !process.env.EMAIL_HOST;
 
-async function getTransporter() {
-  if (_transporter) return _transporter;
-
-  if (!process.env.EMAIL_HOST) {
-    // Dev: use Ethereal auto-account
-    const testAccount = await nodemailer.createTestAccount();
-    _transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-    console.log(`[mailer] Ethereal account: ${testAccount.user}`);
-  } else {
-    _transporter = nodemailer.createTransport({
+const transporter = DEV
+  ? nodemailer.createTransport({ jsonTransport: true })
+  : nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: Number(process.env.EMAIL_PORT) || 587,
       secure: false,
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
-  }
-
-  return _transporter;
-}
 
 async function sendLowStockAlert(alerts) {
   if (!alerts.length) return;
 
-  const transporter = await getTransporter();
-
   const rows = alerts
-    .map(
-      (a) =>
-        `<tr><td>${a.station}</td><td>${a.part_name}</td><td>${a.sku}</td><td>${a.quantity}</td><td>${a.min_threshold}</td></tr>`
-    )
+    .map((a) => `<tr><td>${a.station}</td><td>${a.part_name}</td><td>${a.sku}</td><td>${a.quantity}</td><td>${a.min_threshold}</td></tr>`)
     .join('');
 
   const html = `
@@ -53,8 +33,9 @@ async function sendLowStockAlert(alerts) {
     html,
   });
 
-  if (!process.env.EMAIL_HOST) {
-    console.log(`[mailer] Preview: ${nodemailer.getTestMessageUrl(info)}`);
+  if (DEV) {
+    const msg = JSON.parse(info.message);
+    console.log(`[mailer] Dev alert (not sent) → to: ${msg.to[0].address}, subject: ${msg.subject}`);
   }
 }
 

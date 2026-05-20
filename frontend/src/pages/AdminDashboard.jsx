@@ -230,7 +230,6 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
   }
 
   function handleAdded(part) {
-    // reload from server would be cleaner, but optimistic update works too
     onPartsChange([...parts, { ...part, station_name: stations.find((s) => s.id === part.station_id)?.name }]);
     setFlash('Part added.');
     setTimeout(() => setFlash(''), 3000);
