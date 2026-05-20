@@ -25,7 +25,7 @@ async function sendLowStockAlert(alerts, recipients) {
       <td style="padding:6px 10px;text-align:center">
         <a href="${APP_URL}/order?part_id=${a.part_id}"
            style="background:#2563eb;color:#fff;padding:4px 12px;border-radius:4px;text-decoration:none;font-size:13px">
-          Order →
+          Order
         </a>
       </td>
     </tr>`).join('');
