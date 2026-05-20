@@ -246,7 +246,8 @@ router.get('/:id/history', requireAuth, async (req, res) => {
             u.email AS user_email, al.old_quantity, al.new_quantity, al.delta, al.note
      FROM audit_log al
      LEFT JOIN users u ON u.id = al.user_id
-     WHERE al.part_id = $1`,
+     WHERE al.part_id = $1
+       AND (al.note IS NULL OR al.note NOT LIKE 'Shipment #%')`,
     [partId]
   );
 

@@ -254,15 +254,39 @@ function EditRecipientModal({ recipient, onClose, onSaved }) {
   );
 }
 
-/* ── Part History view ── */
+/* ── Part Detail view (unified history + shipments) ── */
 
-function PartHistoryView({ part, onBack }) {
-  const [history, setHistory] = useState([]);
+const DETAIL_FILTERS = [
+  { value: 'all', label: 'All events' },
+  { value: 'shipment', label: 'Deliveries' },
+  { value: 'quantity_change', label: 'Qty adjustments' },
+];
+
+function PartDetailView({ part, onBack, onDelivered }) {
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [delivering, setDelivering] = useState(null);
 
   useEffect(() => {
-    api.getPartHistory(part.id).then(setHistory).finally(() => setLoading(false));
+    api.getPartHistory(part.id).then(setEvents).finally(() => setLoading(false));
   }, [part.id]);
+
+  async function handleDeliver(e) {
+    setDelivering(e.shipment_id);
+    try {
+      const result = await api.deliverShipment(part.id, e.shipment_id);
+      setEvents((prev) => prev.map((ev) =>
+        ev.shipment_id === e.shipment_id
+          ? { ...ev, status: 'delivered', delivered_at: new Date().toISOString() }
+          : ev
+      ));
+      onDelivered(part.id, result.new_quantity, e.quantity);
+    } catch (err) { alert(err.message); }
+    finally { setDelivering(null); }
+  }
+
+  const visible = filter === 'all' ? events : events.filter((e) => e.type === filter);
 
   return (
     <>
@@ -271,23 +295,28 @@ function PartHistoryView({ part, onBack }) {
         <div>
           <h1>{part.name}</h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            <span className="sku-badge">{part.sku}</span>&nbsp; {part.station_name}
+            <span className="sku-badge">{part.sku}</span>&nbsp;·&nbsp;{part.station_name}
           </p>
         </div>
+        <Dropdown
+          value={filter}
+          onChange={setFilter}
+          options={DETAIL_FILTERS}
+        />
       </div>
       <div className="card">
         {loading ? (
           <div className="empty"><span className="spinner" /></div>
-        ) : history.length === 0 ? (
-          <div className="empty">No activity yet.</div>
+        ) : visible.length === 0 ? (
+          <div className="empty">No events yet.</div>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th></tr>
+                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th><th></th></tr>
               </thead>
               <tbody>
-                {history.map((e, i) => (
+                {visible.map((e, i) => (
                   <tr key={i}>
                     <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(e.at).toLocaleString()}</td>
                     <td>
@@ -297,7 +326,7 @@ function PartHistoryView({ part, onBack }) {
                         </span>
                       ) : (
                         <span className={`badge badge-${e.status === 'delivered' ? 'admin' : 'delegate'}`}>
-                          {e.status === 'delivered' ? 'Delivered' : 'Ordered'}
+                          {e.status === 'delivered' ? 'Delivered' : 'In transit'}
                         </span>
                       )}
                     </td>
@@ -306,87 +335,25 @@ function PartHistoryView({ part, onBack }) {
                       {e.type === 'quantity_change' ? (
                         <>{e.old_quantity} → {e.new_quantity}{e.note ? ` · ${e.note}` : ''}</>
                       ) : (
-                        <>{e.quantity} units{e.tracking_link ? <> · <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a></> : ''}</>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{e.quantity} units</span>
+                          {e.tracking_link && (
+                            <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>
+                          )}
+                          {e.status === 'delivered' && e.delivered_at && (
+                            <span className="meta">{new Date(e.delivered_at).toLocaleDateString()}</span>
+                          )}
+                        </div>
                       )}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-/* ── Shipments view ── */
-
-function ShipmentsView({ part, onBack, onDelivered }) {
-  const [shipments, setShipments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [delivering, setDelivering] = useState(null);
-
-  useEffect(() => {
-    api.getShipments(part.id).then(setShipments).finally(() => setLoading(false));
-  }, [part.id]);
-
-  async function handleDeliver(shipment) {
-    setDelivering(shipment.id);
-    try {
-      const result = await api.deliverShipment(part.id, shipment.id);
-      setShipments((prev) => prev.map((s) => s.id === shipment.id ? { ...s, status: 'delivered', delivered_at: new Date().toISOString() } : s));
-      onDelivered(part.id, result.new_quantity);
-    } catch (e) { alert(e.message); }
-    finally { setDelivering(null); }
-  }
-
-  return (
-    <>
-      <button className="back-arrow" onClick={onBack}>← Back to Parts</button>
-      <div className="dash-header" style={{ marginTop: 8 }}>
-        <div>
-          <h1>Shipments in Transit</h1>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {part.name} · <span className="sku-badge">{part.sku}</span> · {part.station_name}
-          </p>
-        </div>
-      </div>
-      <div className="card">
-        {loading ? (
-          <div className="empty"><span className="spinner" /></div>
-        ) : shipments.length === 0 ? (
-          <div className="empty">No shipments found.</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Date</th><th>Qty</th><th>Ordered by</th><th>Tracking</th><th>Status</th><th></th></tr>
-              </thead>
-              <tbody>
-                {shipments.map((s) => (
-                  <tr key={s.id}>
-                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(s.created_at).toLocaleDateString()}</td>
-                    <td style={{ fontWeight: 600 }}>{s.quantity}</td>
-                    <td className="meta">{s.created_by_email || '—'}</td>
                     <td>
-                      {s.tracking_link
-                        ? <a href={s.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>
-                        : <span className="meta">—</span>}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${s.status === 'delivered' ? 'admin' : 'delegate'}`}>
-                        {s.status === 'delivered' ? `Delivered ${new Date(s.delivered_at).toLocaleDateString()}` : 'In transit'}
-                      </span>
-                    </td>
-                    <td>
-                      {s.status === 'pending' && (
+                      {e.type === 'shipment' && e.status === 'pending' && (
                         <button
                           className="btn btn-primary btn-sm"
-                          onClick={() => handleDeliver(s)}
-                          disabled={delivering === s.id}
+                          onClick={() => handleDeliver(e)}
+                          disabled={delivering === e.shipment_id}
                         >
-                          {delivering === s.id ? <span className="spinner" /> : 'Mark Delivered'}
+                          {delivering === e.shipment_id ? <span className="spinner" /> : 'Mark Delivered'}
                         </button>
                       )}
                     </td>
@@ -406,7 +373,7 @@ function ShipmentsView({ part, onBack, onDelivered }) {
 function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStation }) {
   const [showAdd, setShowAdd] = useState(false);
   const [flash, setFlash] = useState('');
-  const [detailView, setDetailView] = useState(null); // { type: 'history'|'shipments', part }
+  const [detailPart, setDetailPart] = useState(null);
 
   const filtered = filterStation ? parts.filter((p) => p.station_id === parseInt(filterStation)) : parts;
   const lowCount = filtered.filter((p) => p.quantity < p.min_threshold).length;
@@ -415,12 +382,11 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
     onPartsChange(parts.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));
   }
 
-  function handleDelivered(partId, newQty) {
+  function handleDelivered(partId, newQty, deliveredQty) {
     onPartsChange(parts.map((p) => p.id === partId
-      ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - 1) }
+      ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - deliveredQty) }
       : p
     ));
-    setDetailView(null);
   }
 
   async function handleDelete(id) {
@@ -439,11 +405,8 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
     setTimeout(() => setFlash(''), 3000);
   }
 
-  if (detailView?.type === 'history') {
-    return <PartHistoryView part={detailView.part} onBack={() => setDetailView(null)} />;
-  }
-  if (detailView?.type === 'shipments') {
-    return <ShipmentsView part={detailView.part} onBack={() => setDetailView(null)} onDelivered={handleDelivered} />;
+  if (detailPart) {
+    return <PartDetailView part={detailPart} onBack={() => setDetailPart(null)} onDelivered={handleDelivered} />;
   }
 
   return (
@@ -469,8 +432,8 @@ function PartsTab({ parts, stations, onPartsChange, filterStation, setFilterStat
           onUpdated={handleUpdated}
           onDelete={handleDelete}
           isAdmin={true}
-          onViewHistory={(p) => setDetailView({ type: 'history', part: p })}
-          onViewShipments={(p) => setDetailView({ type: 'shipments', part: p })}
+          onViewHistory={(p) => setDetailPart(p)}
+          onViewShipments={(p) => setDetailPart(p)}
         />
       </div>
       {showAdd && <AddPartModal stations={stations} onClose={() => setShowAdd(false)} onAdded={handleAdded} />}

@@ -160,7 +160,7 @@ export default function PartsTable({ parts, onUpdated, onDelete, isAdmin, onView
                       className="btn btn-ghost btn-sm"
                       onClick={() => navigate(`/order?part_id=${p.id}`)}
                     >
-                      Order
+                      Log Shipment
                     </button>
                     <button
                       className="btn btn-ghost btn-sm"

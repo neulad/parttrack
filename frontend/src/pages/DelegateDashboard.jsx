@@ -1,17 +1,76 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar.jsx';
 import PartsTable from '../components/PartsTable.jsx';
 import { api } from '../api/client.js';
 
-/* ── Part History view ── */
+/* ── Part Detail view (unified history + shipments) ── */
 
-function PartHistoryView({ part, onBack }) {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+const DETAIL_FILTERS = [
+  { value: 'all', label: 'All events' },
+  { value: 'shipment', label: 'Deliveries' },
+  { value: 'quantity_change', label: 'Qty adjustments' },
+];
+
+function Dropdown({ value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find((o) => o.value === value);
 
   useEffect(() => {
-    api.getPartHistory(part.id).then(setHistory).finally(() => setLoading(false));
+    function handleOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
+
+  return (
+    <div className="custom-dropdown" ref={ref}>
+      <button type="button" className="custom-dropdown-trigger" onClick={() => setOpen((o) => !o)}>
+        <span>{selected?.label}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }}>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="custom-dropdown-menu">
+          {options.map((o) => (
+            <div key={o.value} className={`custom-dropdown-item${o.value === value ? ' active' : ''}`}
+              onMouseDown={() => { onChange(o.value); setOpen(false); }}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PartDetailView({ part, onBack, onDelivered }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [delivering, setDelivering] = useState(null);
+
+  useEffect(() => {
+    api.getPartHistory(part.id).then(setEvents).finally(() => setLoading(false));
   }, [part.id]);
+
+  async function handleDeliver(e) {
+    setDelivering(e.shipment_id);
+    try {
+      const result = await api.deliverShipment(part.id, e.shipment_id);
+      setEvents((prev) => prev.map((ev) =>
+        ev.shipment_id === e.shipment_id
+          ? { ...ev, status: 'delivered', delivered_at: new Date().toISOString() }
+          : ev
+      ));
+      onDelivered(part.id, result.new_quantity, e.quantity);
+    } catch (err) { alert(err.message); }
+    finally { setDelivering(null); }
+  }
+
+  const visible = filter === 'all' ? events : events.filter((e) => e.type === filter);
 
   return (
     <>
@@ -23,20 +82,21 @@ function PartHistoryView({ part, onBack }) {
             <span className="sku-badge">{part.sku}</span>
           </p>
         </div>
+        <Dropdown value={filter} onChange={setFilter} options={DETAIL_FILTERS} />
       </div>
       <div className="card">
         {loading ? (
           <div className="empty"><span className="spinner" /></div>
-        ) : history.length === 0 ? (
-          <div className="empty">No activity yet.</div>
+        ) : visible.length === 0 ? (
+          <div className="empty">No events yet.</div>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th></tr>
+                <tr><th>Time</th><th>Event</th><th>User</th><th>Details</th><th></th></tr>
               </thead>
               <tbody>
-                {history.map((e, i) => (
+                {visible.map((e, i) => (
                   <tr key={i}>
                     <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(e.at).toLocaleString()}</td>
                     <td>
@@ -46,7 +106,7 @@ function PartHistoryView({ part, onBack }) {
                         </span>
                       ) : (
                         <span className={`badge badge-${e.status === 'delivered' ? 'admin' : 'delegate'}`}>
-                          {e.status === 'delivered' ? 'Delivered' : 'Ordered'}
+                          {e.status === 'delivered' ? 'Delivered' : 'In transit'}
                         </span>
                       )}
                     </td>
@@ -55,87 +115,17 @@ function PartHistoryView({ part, onBack }) {
                       {e.type === 'quantity_change' ? (
                         <>{e.old_quantity} → {e.new_quantity}{e.note ? ` · ${e.note}` : ''}</>
                       ) : (
-                        <>{e.quantity} units{e.tracking_link ? <> · <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a></> : ''}</>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>{e.quantity} units</span>
+                          {e.tracking_link && <a href={e.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>}
+                          {e.status === 'delivered' && e.delivered_at && <span className="meta">{new Date(e.delivered_at).toLocaleDateString()}</span>}
+                        </div>
                       )}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-/* ── Shipments view ── */
-
-function ShipmentsView({ part, onBack, onDelivered }) {
-  const [shipments, setShipments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [delivering, setDelivering] = useState(null);
-
-  useEffect(() => {
-    api.getShipments(part.id).then(setShipments).finally(() => setLoading(false));
-  }, [part.id]);
-
-  async function handleDeliver(shipment) {
-    setDelivering(shipment.id);
-    try {
-      const result = await api.deliverShipment(part.id, shipment.id);
-      setShipments((prev) => prev.map((s) => s.id === shipment.id ? { ...s, status: 'delivered', delivered_at: new Date().toISOString() } : s));
-      onDelivered(part.id, result.new_quantity);
-    } catch (e) { alert(e.message); }
-    finally { setDelivering(null); }
-  }
-
-  return (
-    <>
-      <button className="back-arrow" onClick={onBack}>← Back to My Station</button>
-      <div className="dash-header" style={{ marginTop: 8 }}>
-        <div>
-          <h1>Shipments in Transit</h1>
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-            {part.name} · <span className="sku-badge">{part.sku}</span>
-          </p>
-        </div>
-      </div>
-      <div className="card">
-        {loading ? (
-          <div className="empty"><span className="spinner" /></div>
-        ) : shipments.length === 0 ? (
-          <div className="empty">No shipments found.</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Date</th><th>Qty</th><th>Ordered by</th><th>Tracking</th><th>Status</th><th></th></tr>
-              </thead>
-              <tbody>
-                {shipments.map((s) => (
-                  <tr key={s.id}>
-                    <td className="meta" style={{ whiteSpace: 'nowrap' }}>{new Date(s.created_at).toLocaleDateString()}</td>
-                    <td style={{ fontWeight: 600 }}>{s.quantity}</td>
-                    <td className="meta">{s.created_by_email || '—'}</td>
                     <td>
-                      {s.tracking_link
-                        ? <a href={s.tracking_link} target="_blank" rel="noopener noreferrer" className="tracking-link">Track →</a>
-                        : <span className="meta">—</span>}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${s.status === 'delivered' ? 'admin' : 'delegate'}`}>
-                        {s.status === 'delivered' ? `Delivered ${new Date(s.delivered_at).toLocaleDateString()}` : 'In transit'}
-                      </span>
-                    </td>
-                    <td>
-                      {s.status === 'pending' && (
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => handleDeliver(s)}
-                          disabled={delivering === s.id}
-                        >
-                          {delivering === s.id ? <span className="spinner" /> : 'Mark Delivered'}
+                      {e.type === 'shipment' && e.status === 'pending' && (
+                        <button className="btn btn-primary btn-sm" onClick={() => handleDeliver(e)} disabled={delivering === e.shipment_id}>
+                          {delivering === e.shipment_id ? <span className="spinner" /> : 'Mark Delivered'}
                         </button>
                       )}
                     </td>
@@ -156,7 +146,7 @@ export default function DelegateDashboard() {
   const [parts, setParts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [detailView, setDetailView] = useState(null);
+  const [detailPart, setDetailPart] = useState(null);
 
   const loadParts = useCallback(async () => {
     setLoading(true);
@@ -177,33 +167,21 @@ export default function DelegateDashboard() {
     setParts((prev) => prev.map((p) => p.id === partId ? { ...p, quantity: newQty } : p));
   }
 
-  function handleDelivered(partId, newQty) {
+  function handleDelivered(partId, newQty, deliveredQty) {
     setParts((prev) => prev.map((p) => p.id === partId
-      ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - 1) }
+      ? { ...p, quantity: newQty, in_transit: Math.max(0, parseInt(p.in_transit || 0) - deliveredQty) }
       : p
     ));
-    setDetailView(null);
   }
 
   const lowCount = parts.filter((p) => p.quantity < p.min_threshold).length;
 
-  if (detailView?.type === 'history') {
+  if (detailPart) {
     return (
       <div className="page">
         <Navbar />
         <div className="container" style={{ paddingTop: 24 }}>
-          <PartHistoryView part={detailView.part} onBack={() => setDetailView(null)} />
-        </div>
-      </div>
-    );
-  }
-
-  if (detailView?.type === 'shipments') {
-    return (
-      <div className="page">
-        <Navbar />
-        <div className="container" style={{ paddingTop: 24 }}>
-          <ShipmentsView part={detailView.part} onBack={() => setDetailView(null)} onDelivered={handleDelivered} />
+          <PartDetailView part={detailPart} onBack={() => setDetailPart(null)} onDelivered={handleDelivered} />
         </div>
       </div>
     );
@@ -236,8 +214,8 @@ export default function DelegateDashboard() {
               onUpdated={handleUpdated}
               onDelete={() => {}}
               isAdmin={false}
-              onViewHistory={(p) => setDetailView({ type: 'history', part: p })}
-              onViewShipments={(p) => setDetailView({ type: 'shipments', part: p })}
+              onViewHistory={(p) => setDetailPart(p)}
+              onViewShipments={(p) => setDetailPart(p)}
             />
           )}
         </div>
