@@ -1,0 +1,37 @@
+@startuml
+title PartTrack — Component Diagram
+
+package "Docker Compose" {
+
+  node "Frontend (nginx:alpine)" as FE {
+    component "React 18 SPA" as React
+  }
+
+  node "Backend (node:20-alpine)" as BE {
+    component "Express 4" as Express
+    component "JWT Middleware" as JWT
+    component "express-validator" as EV
+    component "Hourly Cron (node-cron)" as Cron
+    component "Nodemailer" as Mailer
+  }
+
+  node "Database (postgres:16)" as DB {
+    database "PostgreSQL" as PG
+  }
+}
+
+actor "Admin" as A
+actor "Delegate" as D
+actor "SMTP Server (Gmail)" as SMTP
+
+A --> FE : HTTP :80
+D --> FE : HTTP :80
+FE --> Express : /api/* proxy
+Express --> JWT : verify Bearer token
+Express --> EV : validate inputs
+Express --> PG : parameterised queries
+Cron --> PG : hourly stock check
+Cron --> Mailer : trigger alerts
+Mailer --> SMTP : send email
+
+@enduml

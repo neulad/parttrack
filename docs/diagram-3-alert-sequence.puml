@@ -1,0 +1,34 @@
+@startuml
+title PartTrack — Low-Stock Alert Sequence
+
+participant "node-cron\n(hourly)" as Cron
+participant "stockCheck.js" as SC
+database "PostgreSQL" as DB
+participant "mailer.js" as Mailer
+participant "SMTP" as SMTP
+actor "Alert Recipient" as Recipient
+
+Cron -> SC : runStockCheck()
+
+SC -> DB : DELETE email_cooldowns\nwhere qty + in_transit >= threshold
+DB --> SC : cooldowns reset
+
+SC -> DB : SELECT parts where qty < min_threshold\n(+ in_transit, last_sent_at, alert_count)
+DB --> SC : candidate list
+
+SC -> SC : shouldAlert() filter\n• skip if qty + in_transit >= threshold\n• count < 3 → require 24 h gap\n• count >= 3 → Monday 08:00 + 144 h gap
+
+alt no parts to alert
+  SC -> SC : log "No alerts to send"
+else parts need alerting
+  SC -> DB : SELECT alert_recipients
+  DB --> SC : email list
+
+  SC -> Mailer : sendLowStockAlert(parts, emails)
+  Mailer -> SMTP : sendMail (HTML table)
+  SMTP -> Recipient : low-stock email
+
+  SC -> DB : UPSERT email_cooldowns\n(last_sent_at = now, alert_count + 1)
+end
+
+@enduml

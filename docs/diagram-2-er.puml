@@ -1,0 +1,88 @@
+@startuml
+title PartTrack — Database ER Diagram
+
+entity "stations" as stations {
+  * id : serial <<PK>>
+  --
+  * name : text
+  location : text
+  * created_at : timestamptz
+}
+
+entity "users" as users {
+  * id : serial <<PK>>
+  --
+  * email : text <<UNIQUE>>
+  * password_hash : text
+  * role : text (admin | delegate)
+  station_id : integer <<FK>>
+  * created_at : timestamptz
+}
+
+entity "parts" as parts {
+  * id : serial <<PK>>
+  --
+  * station_id : integer <<FK>>
+  * name : text
+  * sku : text
+  supplier : text
+  * min_threshold : integer
+  * created_at : timestamptz
+}
+
+entity "stock_levels" as stock {
+  * id : serial <<PK>>
+  --
+  * part_id : integer <<FK>> <<UNIQUE>>
+  * quantity : integer
+  * updated_at : timestamptz
+}
+
+entity "shipments" as shipments {
+  * id : serial <<PK>>
+  --
+  * part_id : integer <<FK>>
+  * quantity : integer
+  tracking_link : text
+  * status : text (pending | delivered)
+  created_by : integer <<FK>>
+  * created_at : timestamptz
+  delivered_at : timestamptz
+}
+
+entity "audit_log" as audit {
+  * id : serial <<PK>>
+  --
+  user_id : integer <<FK>>
+  part_id : integer <<FK>>
+  old_quantity : integer
+  new_quantity : integer
+  delta : integer
+  note : text
+  * created_at : timestamptz
+}
+
+entity "email_cooldowns" as cooldowns {
+  * part_id : integer <<PK>> <<FK>>
+  --
+  * last_sent_at : timestamptz
+  * alert_count : integer
+}
+
+entity "alert_recipients" as recipients {
+  * id : serial <<PK>>
+  --
+  * email : text <<UNIQUE>>
+  * created_at : timestamptz
+}
+
+stations ||--o{ users
+stations ||--o{ parts
+parts ||--|| stock
+parts ||--o{ shipments
+parts ||--o{ audit
+parts ||--o| cooldowns
+users ||--o{ shipments
+users ||--o{ audit
+
+@enduml

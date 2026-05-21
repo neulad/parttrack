@@ -143,15 +143,13 @@ The frontend container serves the React build and reverse-proxies `/api/*` to th
 
 ## UML Diagrams
 
-The file [`docs/architecture.puml`](docs/architecture.puml) contains three PlantUML diagrams:
+Three PlantUML diagrams are provided in the `docs/` folder. Open each file, copy the full contents, and paste into **[plantuml.com/plantuml/uml](https://www.plantuml.com/plantuml/uml/)**.
 
-| Diagram | What it shows |
-|---|---|
-| **Component diagram** | Containers, internal services, and external actors |
-| **ER diagram** | All database tables and their relationships |
-| **Sequence diagram** | The automated low-stock alert flow end-to-end |
-
-To view them, paste each `@startuml … @enduml` block from the file into **[plantuml.com/plantuml/uml](https://www.plantuml.com/plantuml/uml/)**.
+| File | Diagram | What it shows |
+|---|---|---|
+| [`docs/diagram-1-components.puml`](docs/diagram-1-components.puml) | Component | Containers, internal services, and external actors |
+| [`docs/diagram-2-er.puml`](docs/diagram-2-er.puml) | ER | All database tables and their relationships |
+| [`docs/diagram-3-alert-sequence.puml`](docs/diagram-3-alert-sequence.puml) | Sequence | The automated low-stock alert flow end-to-end |
 
 ### Database schema (summary)
 
