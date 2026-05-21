@@ -9,11 +9,11 @@
 ## Screenshots
 
 > **Add your own screenshots here before submission.**  
-> Suggested captures: login page, admin Parts tab, low-stock row highlight, Log Shipment page, part history view, alert recipients panel.
+> Suggested captures: login page, Parts tab, low-stock row highlight, Log Shipment page, part history view, alert recipients panel.
 
-| Admin Dashboard | Part History |
+| Parts | Part History |
 |---|---|
-| ![Admin dashboard](docs/screenshots/admin-dashboard.png) | ![Part history](docs/screenshots/part-history.png) |
+| ![Parts](docs/screenshots/parts.png) | ![Part history](docs/screenshots/part-history.png) |
 
 | Log Shipment | Alert Recipients |
 |---|---|
