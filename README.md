@@ -1,3 +1,4 @@
+![Uploading Screenshot 2026-05-21 at 21.32.27.png…]()
 # PartTrack
 
 > Inventory management system for manufacturing stations — real-time stock tracking, shipment lifecycle management, and automated low-stock email alerts.
@@ -13,11 +14,11 @@
 
 | Parts | Part History |
 |---|---|
-| ![Parts](docs/screenshots/parts.png) | ![Part history](docs/screenshots/part-history.png) |
+| ![Parts](https://github.com/user-attachments/assets/81af56df-d28e-480e-9058-e58e80a8cf64) | ![Part History](https://github.com/user-attachments/assets/0ed179c8-3079-405c-83d3-f61575d42b5f) |
 
 | Log Shipment | Alert Recipients |
 |---|---|
-| ![Log shipment](docs/screenshots/log-shipment.png) | ![Alert recipients](docs/screenshots/alerts.png) |
+| ![Log shipment](https://github.com/user-attachments/assets/9e132dae-6acd-4865-a0ea-32cbf53c7dcd) | ![Alert recipients](https://github.com/user-attachments/assets/fbe5d426-72cb-418e-b754-13de5552af9b) |
 
 ---
 
