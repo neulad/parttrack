@@ -75,7 +75,7 @@ JWT_SECRET=change-me-to-a-long-random-string
 NODE_ENV=development
 
 # Public URL used in alert email links (no trailing slash)
-APP_URL=http://localhost
+APP_URL=http://localhost:80
 
 # SMTP — leave blank to disable sending (alerts are logged to console instead)
 EMAIL_HOST=smtp.gmail.com
@@ -97,7 +97,7 @@ This will:
 - Start PostgreSQL and wait for a healthy status
 - Run all database migrations automatically
 - Seed the database with sample stations, parts, and a default admin account
-- Serve the frontend at **[http://localhost](http://localhost)**
+- Serve the frontend at **[http://localhost:80](http://localhost:80)**
 
 ### 4. Default credentials
 
@@ -265,7 +265,7 @@ Three PlantUML diagrams are provided in the `docs/` folder. Open each file, copy
 |---|---|---|---|
 | `JWT_SECRET` | **Yes** | — | JWT signing key. Application refuses to start if unset. |
 | `NODE_ENV` | No | `development` | Node environment |
-| `APP_URL` | No | `http://localhost` | Base URL embedded in alert email links |
+| `APP_URL` | No | `http://localhost:80` | Base URL embedded in alert email links |
 | `EMAIL_HOST` | No | — | SMTP host. Leave blank to disable email. |
 | `EMAIL_PORT` | No | `587` | SMTP port |
 | `EMAIL_USER` | No | — | SMTP username |
