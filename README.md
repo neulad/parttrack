@@ -83,12 +83,35 @@ Manufacturing stations depend on a continuous supply of components. When a part 
 The system is composed of three Docker containers that communicate over an internal Docker network:
 
 ```
-Browser
-  │
-  ▼
-nginx :80
-  ├── /api/*  ──► Express :4000  ──► PostgreSQL :5432
-  └── /*      ──► React SPA (static files)
+  Browser
+     │
+     │ HTTP :80
+     ▼
+┌─────────────────────────────┐
+│  frontend  (nginx:alpine)   │
+│                             │
+│  • serves React SPA         │
+│  • proxies /api/* requests  │
+└──────────────┬──────────────┘
+               │ HTTP :4000
+               ▼
+┌─────────────────────────────┐
+│  backend  (node:20-alpine)  │
+│                             │
+│  • Express 4 REST API       │
+│  • JWT auth middleware      │
+│  • express-validator        │
+│  • node-cron stock checker  │
+│  • nodemailer alerts        │
+└──────────────┬──────────────┘
+               │ TCP :5432
+               ▼
+┌─────────────────────────────┐
+│  db  (postgres:16)          │
+│                             │
+│  • persistent pg_data vol   │
+│  • auto-migrated on start   │
+└─────────────────────────────┘
 ```
 
 ### Directory layout
