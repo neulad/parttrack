@@ -44,6 +44,79 @@ Manufacturing stations depend on a continuous supply of components. When a part 
 
 ---
 
+## Requirements
+
+- Docker Desktop ≥ 4.x (includes Docker Compose v2)
+- A `.env` file in the project root (see [Setup](#setup))
+- For email alerts: a Gmail account with an App Password
+
+---
+
+## Setup
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd part_tracker
+```
+
+### 2. Create the environment file
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set at minimum `JWT_SECRET`. For email alerts, fill in the `EMAIL_*` variables.
+
+```env
+# Required — fail-fast on startup if missing
+JWT_SECRET=change-me-to-a-long-random-string
+
+NODE_ENV=development
+
+# Public URL used in alert email links (no trailing slash)
+APP_URL=http://localhost
+
+# SMTP — leave blank to disable sending (alerts are logged to console instead)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-gmail@gmail.com
+EMAIL_PASS=          # ← Gmail App Password
+EMAIL_FROM=your-gmail@gmail.com
+```
+
+> **Gmail App Password:** provided separately by the student.
+
+### 3. Start the stack
+
+```bash
+docker compose up -d --build
+```
+
+This will:
+- Start PostgreSQL and wait for a healthy status
+- Run all database migrations automatically
+- Seed the database with sample stations, parts, and a default admin account
+- Serve the frontend at **[http://localhost](http://localhost)**
+
+### 4. Default credentials
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@parttrack.dev` | `admin123` | Admin |
+| `delegate@parttrack.dev` | `delegate123` | Delegate |
+
+### 5. Running the tests
+
+```bash
+docker compose exec backend npm test
+```
+
+Tests run entirely inside the container — no local Node.js installation is required.
+
+---
+
 ## Tech Stack
 
 ### Backend
@@ -173,89 +246,17 @@ Three PlantUML diagrams are provided in the `docs/` folder. Open each file, copy
 
 ### Database schema (summary)
 
-```
-stations ──< parts ──── stock_levels   (1 part : 1 stock row)
-                   ──< shipments
-                   ──< audit_log
-                   ──< email_cooldowns
-users    ──< shipments
-         ──< audit_log
-         └──> stations  (station_id)
-alert_recipients         (standalone — stores notification emails)
-```
-
----
-
-## Requirements
-
-- Docker Desktop ≥ 4.x (includes Docker Compose v2)
-- A `.env` file in the project root (see [Setup](#setup))
-- For email alerts: a Gmail account with an App Password
-
----
-
-## Setup
-
-### 1. Clone the repository
-
-```bash
-git clone <repository-url>
-cd part_tracker
-```
-
-### 2. Create the environment file
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and set at minimum `JWT_SECRET`. For email alerts, fill in the `EMAIL_*` variables.
-
-```env
-# Required — fail-fast on startup if missing
-JWT_SECRET=change-me-to-a-long-random-string
-
-NODE_ENV=development
-
-# Public URL used in alert email links (no trailing slash)
-APP_URL=http://localhost
-
-# SMTP — leave blank to disable sending (alerts are logged to console instead)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASS=          # ← Gmail App Password
-EMAIL_FROM=your-gmail@gmail.com
-```
-
-> **Gmail App Password:** provided separately by the student.
-
-### 3. Start the stack
-
-```bash
-docker compose up -d --build
-```
-
-This will:
-- Start PostgreSQL and wait for a healthy status
-- Run all database migrations automatically
-- Seed the database with sample stations, parts, and a default admin account
-- Serve the frontend at **[http://localhost](http://localhost)**
-
-### 4. Default credentials
-
-| Email | Password | Role |
+| Table | Relates to | Relationship |
 |---|---|---|
-| `admin@parttrack.dev` | `admin123` | Admin |
-| `delegate@parttrack.dev` | `delegate123` | Delegate |
-
-### 5. Running the tests
-
-```bash
-docker compose exec backend npm test
-```
-
-Tests run entirely inside the container — no local Node.js installation is required.
+| `stations` | `parts` | one station → many parts |
+| `stations` | `users` | one station → many delegates |
+| `parts` | `stock_levels` | one part → exactly one stock row |
+| `parts` | `shipments` | one part → many shipments |
+| `parts` | `audit_log` | one part → many audit entries |
+| `parts` | `email_cooldowns` | one part → at most one cooldown record |
+| `users` | `shipments` | one user → many shipments created |
+| `users` | `audit_log` | one user → many audit entries |
+| `alert_recipients` | — | standalone table of notification emails |
 
 ---
 
