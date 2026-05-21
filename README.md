@@ -208,7 +208,7 @@ EMAIL_PASS=          # ← Gmail App Password
 EMAIL_FROM=your-gmail@gmail.com
 ```
 
-> **Gmail App Password:** Google Account → Security → 2-Step Verification → App Passwords. Generate one for "Mail". Do **not** use your regular account password.
+> **Gmail App Password:** provided separately by the student.
 
 ### 3. Start the stack
 
@@ -228,8 +228,6 @@ This will:
 |---|---|---|
 | `admin@parttrack.dev` | `admin123` | Admin |
 | `delegate@parttrack.dev` | `delegate123` | Delegate |
-
-> Change these immediately in the Users tab after first login.
 
 ### 5. Running the tests
 
