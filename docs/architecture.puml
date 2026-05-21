@@ -1,0 +1,172 @@
+@startuml PartTrack Architecture
+
+' ─────────────────────────────────────────
+' COMPONENT DIAGRAM
+' ─────────────────────────────────────────
+package "Docker Compose" {
+
+  node "Frontend\n(nginx:alpine)" as FE {
+    component "React 18 SPA" as React
+    component "Vite 5 build" as Vite
+    component "React Router 6" as RR
+  }
+
+  node "Backend\n(node:20-alpine)" as BE {
+    component "Express 4" as Express
+    component "JWT Auth\nMiddleware" as JWT
+    component "express-validator" as EV
+    component "Hourly Cron Job\n(node-cron)" as Cron
+    component "Nodemailer" as Mailer
+  }
+
+  node "Database\n(postgres:16)" as DB {
+    database "PostgreSQL" as PG
+  }
+
+  component "nginx reverse proxy" as Nginx
+}
+
+actor "Admin" as A
+actor "Delegate" as D
+actor "SMTP Server\n(Gmail)" as SMTP
+
+A --> Nginx : HTTP :80
+D --> Nginx : HTTP :80
+Nginx --> React : static assets
+Nginx --> Express : /api/* proxy
+Express --> JWT : verify Bearer token
+Express --> EV : validate inputs
+Express --> PG : parameterised queries
+Cron --> PG : hourly stock check
+Cron --> Mailer : trigger alerts
+Mailer --> SMTP : send email
+
+@enduml
+
+@startuml PartTrack Database Schema
+
+' ─────────────────────────────────────────
+' ENTITY-RELATIONSHIP DIAGRAM
+' ─────────────────────────────────────────
+entity "stations" as stations {
+  * id : serial PK
+  --
+  * name : text
+  location : text
+  * created_at : timestamptz
+}
+
+entity "users" as users {
+  * id : serial PK
+  --
+  * email : text UNIQUE
+  * password_hash : text
+  * role : text (admin|delegate)
+  station_id : integer FK → stations
+  * created_at : timestamptz
+}
+
+entity "parts" as parts {
+  * id : serial PK
+  --
+  * station_id : integer FK → stations
+  * name : text
+  * sku : text
+  supplier : text
+  * min_threshold : integer
+  * created_at : timestamptz
+}
+
+entity "stock_levels" as stock {
+  * id : serial PK
+  --
+  * part_id : integer FK → parts UNIQUE
+  * quantity : integer
+  * updated_at : timestamptz
+}
+
+entity "shipments" as shipments {
+  * id : serial PK
+  --
+  * part_id : integer FK → parts
+  * quantity : integer
+  tracking_link : text
+  * status : text (pending|delivered)
+  created_by : integer FK → users
+  * created_at : timestamptz
+  delivered_at : timestamptz
+}
+
+entity "audit_log" as audit {
+  * id : serial PK
+  --
+  user_id : integer FK → users
+  part_id : integer FK → parts
+  old_quantity : integer
+  new_quantity : integer
+  delta : integer
+  note : text
+  * created_at : timestamptz
+}
+
+entity "email_cooldowns" as cooldowns {
+  * part_id : integer PK FK → parts
+  --
+  * last_sent_at : timestamptz
+  * alert_count : integer
+}
+
+entity "alert_recipients" as recipients {
+  * id : serial PK
+  --
+  * email : text UNIQUE
+  * created_at : timestamptz
+}
+
+stations ||--o{ users : "assigned to"
+stations ||--o{ parts : "has"
+parts ||--|| stock : "tracked by"
+parts ||--o{ shipments : "ordered as"
+parts ||--o{ audit : "logged in"
+parts ||--o| cooldowns : "throttled by"
+users ||--o{ shipments : "created by"
+users ||--o{ audit : "performed by"
+
+@enduml
+
+@startuml PartTrack Alert Sequence
+
+' ─────────────────────────────────────────
+' SEQUENCE DIAGRAM — Low-stock alert flow
+' ─────────────────────────────────────────
+participant "node-cron\n(hourly)" as Cron
+participant "stockCheck.js" as SC
+database "PostgreSQL" as DB
+participant "mailer.js" as Mailer
+participant "SMTP" as SMTP
+actor "Alert Recipient" as Recipient
+
+Cron -> SC : trigger runStockCheck()
+
+SC -> DB : DELETE email_cooldowns\nwhere qty + in_transit >= threshold
+DB --> SC : cooldowns reset
+
+SC -> DB : SELECT parts where\nqty < min_threshold\n+ in_transit, last_sent_at,\nalert_count
+DB --> SC : candidate list
+
+SC -> SC : shouldAlert() filter\n• skip if qty+transit >= threshold\n• count<3 → 24h gap\n• count≥3 → Monday 8am + 144h gap
+
+alt no parts to alert
+  SC -> SC : log "No alerts to send"
+else parts to alert
+  SC -> DB : SELECT alert_recipients
+  DB --> SC : email list
+
+  SC -> Mailer : sendLowStockAlert(parts, emails)
+  Mailer -> SMTP : sendMail (HTML table)
+  SMTP -> Recipient : low-stock email
+
+  SC -> DB : UPSERT email_cooldowns\n(last_sent_at=now,\nalert_count+1)
+end
+
+@enduml
