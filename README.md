@@ -1,4 +1,3 @@
-![Uploading Screenshot 2026-05-21 at 21.32.27.png…]()
 # PartTrack
 
 > Inventory management system for manufacturing stations — real-time stock tracking, shipment lifecycle management, and automated low-stock email alerts.
