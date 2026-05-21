@@ -48,7 +48,6 @@ Manufacturing stations depend on a continuous supply of components. When a part 
 
 - Docker Desktop ≥ 4.x (includes Docker Compose v2)
 - A `.env` file in the project root (see [Setup](#setup))
-- For email alerts: a Gmail account with an App Password
 
 ---
 
