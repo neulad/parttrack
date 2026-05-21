@@ -9,9 +9,6 @@
 
 ## Screenshots
 
-> **Add your own screenshots here before submission.**  
-> Suggested captures: login page, Parts tab, low-stock row highlight, Log Shipment page, part history view, alert recipients panel.
-
 | Parts | Part History |
 |---|---|
 | ![Parts](https://github.com/user-attachments/assets/81af56df-d28e-480e-9058-e58e80a8cf64) | ![Part History](https://github.com/user-attachments/assets/0ed179c8-3079-405c-83d3-f61575d42b5f) |
